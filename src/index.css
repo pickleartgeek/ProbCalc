@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-data: "IBM Plex Mono", monospace;
+  --font-wordmark: "Space Grotesk", sans-serif;
+
+  --color-void: #0a0e17;
+  --color-panel: #121826;
+  --color-panel-raised: #1a2233;
+  --color-hairline: #262f45;
+  --color-hairline-bright: #3a4562;
+  --color-ink: #eef0f6;
+  --color-ink-muted: #8994ac;
+  --color-ink-dim: #5c6580;
+  --color-gold: #f2b705;
+  --color-gold-dim: #8a6c1f;
+  --color-cyan: #4fd8e8;
+  --color-red-call: #e14b4b;
+  --color-blue-call: #3b82f6;
+}
+
+html, body {
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+* {
+  scrollbar-color: var(--color-hairline-bright) var(--color-panel);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+.font-data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.font-wordmark {
+  font-family: var(--font-wordmark);
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker-track {
+  animation: ticker-scroll 40s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-live {
+  animation: pulse-live 1.8s ease-in-out infinite;
+}
