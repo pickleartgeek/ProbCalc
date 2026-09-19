@@ -40,17 +40,33 @@ precinct-playback election night, a polling world map, and a trend tracker.
 
 ### About the map(s)
 
-Two different "map" concepts live in this app, intentionally:
+Three different "map" concepts live in this app, intentionally:
 
 1. **District mosaic** (`PlaceholderMap`) — an abstract grid of tiles allocated
-   proportionally to vote share/win probability, used on Results, Election Night, and
-   the Infobox. Not real geography. Swapping in real GeoJSON/shapefile-per-country later
-   means writing a new component that consumes the same `shares: Record<partyId, number>`
-   prop and replacing it in `Results.tsx` / `ElectionNight.tsx` / `Infobox.tsx`.
+   proportionally to vote share/win probability, used on Election Night, the Infobox,
+   and Results for any race that isn't the real United States. Not real geography.
 2. **World map** (`WorldMap.tsx`) — a *real* map using actual country border data
    (`world-atlas`'s 110m topojson, bundled locally in `src/data/`, no runtime network
-   fetch) rendered with `d3-geo` + `topojson-client`. This one didn't need per-district
-   shapefiles, just world borders, so it's the real thing rather than a placeholder.
+   fetch) rendered with `d3-geo` + `topojson-client`.
+3. **US precinct map** (`USPrecinctMap.tsx`) — real 2024 precinct-level geometry and
+   results, wired into the *regular* Results view whenever `config.region === 'United
+   States'` (no separate tab). National choropleth (`us-atlas` states-10m + real
+   per-state vote totals) as the entry view; click a state to drill into its actual
+   precincts, loaded on demand from `public/data/precincts/<STATE>.json`. The
+   `base`/`prob` toggle switches between real 2024 returns and a fresh **precinct-level
+   ProbCalc simulation** — an independent gamma draw per precinct (`simulatePrecinct` in
+   `src/lib/precinct/results.ts`), using that precinct's own real vote count as the
+   BaseCalc alpha input. This is the guide's II.II math applied at precinct scale
+   instead of national-poll scale; a "Draw new simulation" button re-rolls it.
+
+   `public/data/precincts/` ships all 50 states + DC (163,925 real precincts, ~605MB
+   total, largest single file ~51MB) split from the full NYT precinct file via
+   `scripts/split-precincts-by-state.mjs` — a streaming converter built specifically
+   because the source file (640MB decompressed) is too large for `JSON.parse` or a
+   naive in-memory pass; see that script's header comment for the two-pass /
+   disk-spill approach and why it's structured that way. `scripts/enrich-manifest.mjs`
+   adds real per-state vote totals to `manifest.json` for the national choropleth's
+   coloring, as a fast second pass over the (much smaller) per-state outputs.
 
 ### About the Tracker's persistence
 
@@ -61,6 +77,62 @@ after that, hit **📌 Log snapshot** on the Results page whenever you want to a
 data point (e.g. after pasting updated polling data). ProbCalc results get attached to
 the most recent snapshot when you run them. There's no cross-device sync — it's your
 browser's local storage, so it survives refreshes but not a different browser/device.
+
+## Running locally
+
+```
+npm install
+npm run dev
+```
+
+## Building
+
+```
+npm run build
+```
+
+Outputs to `dist/`.
+
+## Deploying to GitHub Pages (no Actions)
+
+This is set up for the simplest possible Pages deploy — build locally, commit the
+output, no CI to configure.
+
+1. `npm run build` — produces `dist/`
+2. Rename (or copy) `dist/` to `docs/` at the repo root:
+   ```
+   rm -rf docs && cp -r dist docs
+   ```
+3. Commit and push `docs/` to your repo's default branch.
+4. In your GitHub repo: **Settings → Pages → Build and deployment → Source** → "Deploy
+   from a branch", then pick your default branch and the **/docs** folder.
+5. GitHub will give you a `https://<user>.github.io/<repo>/` URL a minute or two later.
+
+`vite.config.ts` already uses `base: './'` (relative paths), so this works whether the
+repo is served from a user/org root site or a project subpath — no config changes
+needed either way.
+
+Re-deploying later is just steps 1–3 again.
+
+### A note on repo size now that precinct data is included
+
+`public/data/precincts/` is ~605MB (all 50 states + DC, real 2024 precinct geometry +
+results). Every individual file is well under GitHub's 100MB hard per-file limit
+(largest is CA at ~51MB), so a plain `git add`/`commit`/`push` will *work* — but it
+means every clone of this repo downloads 600MB+, and that weight is permanent in git
+history from the commit you add it in onward (deleting the files later doesn't remove
+them from history/clone size). Two reasonable ways to avoid that:
+
+- **Git LFS** for everything under `public/data/precincts/` — the standard fix for
+  "large binary-ish assets committed to a repo people will clone."
+- **Don't commit them at all**: host `public/data/precincts/*.json` somewhere else
+  (a release asset, object storage, a CDN) and change `USPrecinctMap.tsx`'s fetch
+  base URL to point there instead of `${BASE_URL}data/precincts/`. GitHub Pages itself
+  has no problem *serving* large static files once they exist there — the cost is
+  entirely in the git repo/clone, not the Pages hosting.
+
+Either way, the app code doesn't change — it fetches `manifest.json` and
+`<STATE>.json` by relative URL and doesn't care where they physically live.
 
 ## Architecture notes
 

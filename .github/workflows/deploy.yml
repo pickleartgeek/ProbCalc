@@ -1,0 +1,59 @@
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deploy at a time; let an in-progress run finish rather than
+# cancelling it, so Pages never ends up serving a half-deployed build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch and split precinct data
+        run: |
+          curl -L -o precincts.topojson.gz "https://github.com/pickleartgeek/ProbCalc/releases/download/united-states/precincts-with-results.topojson.gz"
+          gunzip precincts.topojson.gz
+          mkdir -p public/data/precincts
+          node scripts/split-precincts-by-state.mjs precincts.topojson public/data/precincts
+          node scripts/enrich-manifest.mjs public/data/precincts
+          rm -f precincts.topojson
+          echo "public/data/precincts contents:"
+          ls -la public/data/precincts | head -20
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
