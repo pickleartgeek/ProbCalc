@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { RatingBadge } from './RatingBadge';
 import { RATING_ORDER, type Rating } from '../../lib/midterms/ratings';
+import { getRaceMarginHistory } from '../../lib/midterms/gcbHistory';
 import type { SenateRace, GovernorRace } from '../../lib/midterms/types';
 
 type Race = SenateRace | GovernorRace;
@@ -15,6 +16,36 @@ const FILTERS: { key: 'all' | 'competitive' | 'D' | 'R'; label: string }[] = [
 function pviLabel(margin: number): string {
   if (Math.abs(margin) < 0.05) return 'EVEN';
   return margin > 0 ? `R+${margin.toFixed(1)}` : `D+${Math.abs(margin).toFixed(1)}`;
+}
+
+/** Faint background trace of this race's margin as you've moved the GCB slider this session (see gcbHistory.ts) — not historical polling, just this session's own exploration. Renders nothing until there are at least two recorded readings. */
+function MarginSparkline({ raceId }: { raceId: string }) {
+  const points = useMemo(() => getRaceMarginHistory(raceId), [raceId]);
+  if (points.length < 2) return null;
+  const margins = points.map((p) => p.margin);
+  const min = Math.min(...margins, -1);
+  const max = Math.max(...margins, 1);
+  const range = Math.max(0.5, max - min);
+  const w = 100;
+  const h = 100;
+  const path = points
+    .map((p, i) => {
+      const x = (i / (points.length - 1)) * w;
+      const y = h - ((p.margin - min) / range) * h;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const last = margins[margins.length - 1];
+  const stroke = last >= 0 ? '#ea4b4b' : '#3b82f6';
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="absolute inset-0 w-full h-full opacity-[0.14] pointer-events-none"
+    >
+      <path d={path} fill="none" stroke={stroke} strokeWidth={4} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
 }
 
 export function RaceList({
@@ -64,27 +95,35 @@ export function RaceList({
           <button
             key={r.id}
             onClick={() => onSelect?.(r.stateAbbr)}
-            className={`text-left bg-panel border rounded-lg px-4 py-3 transition-colors hover:border-hairline-bright ${
+            className={`relative overflow-hidden text-left bg-panel border rounded-lg px-4 py-3 transition-colors hover:border-hairline-bright ${
               selected === r.stateAbbr ? 'border-gold' : 'border-hairline'
             }`}
           >
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-display font-700 text-base">{r.stateName}</span>
-              <RatingBadge rating={r.rating} />
-            </div>
-            <div className="text-ink-muted text-xs">
-              {r.open ? (
-                <span>Open seat &middot; {r.incumbentParty}-held</span>
-              ) : (
-                <span>{r.incumbentName} ({r.incumbentParty})</span>
-              )}
-              {'special' in r && r.special && <span className="text-cyan"> &middot; special</span>}
-            </div>
-            {pvi && pvi[r.stateAbbr] != null && (
-              <div className="text-ink-dim text-[11px] font-data mt-1">
-                2024 pres. margin: <span className="text-ink-muted">{pviLabel(pvi[r.stateAbbr])}</span>
+            <MarginSparkline raceId={r.id} />
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-display font-700 text-base">{r.stateName}</span>
+                <RatingBadge rating={r.rating} />
               </div>
-            )}
+              <div className="text-ink-muted text-xs">
+                {r.open ? (
+                  <span>Open seat &middot; {r.incumbentParty}-held</span>
+                ) : (
+                  <span>{r.incumbentName} ({r.incumbentParty})</span>
+                )}
+                {'special' in r && r.special && <span className="text-cyan"> &middot; special</span>}
+              </div>
+              {pvi && pvi[r.stateAbbr] != null && (
+                <div className="text-ink-dim text-[11px] font-data mt-1">
+                  2024 pres. margin: <span className="text-ink-muted">{pviLabel(pvi[r.stateAbbr])}</span>
+                </div>
+              )}
+              {r.computedMargin !== undefined && (
+                <div className="text-ink-dim text-[11px] font-data mt-0.5">
+                  Model margin: <span className="text-ink-muted">{pviLabel(r.computedMargin)}</span>
+                </div>
+              )}
+            </div>
           </button>
         ))}
       </div>

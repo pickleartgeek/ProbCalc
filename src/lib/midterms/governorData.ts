@@ -22,7 +22,8 @@ const RAW: Omit<GovernorRace, 'id' | 'stateName'>[] = [
   { stateAbbr: 'ME', incumbentParty: 'D', incumbentName: null, open: true, rating: 'LeanD' },
   { stateAbbr: 'MD', incumbentParty: 'D', incumbentName: 'Wes Moore', open: false, rating: 'SafeD' },
   { stateAbbr: 'MA', incumbentParty: 'D', incumbentName: 'Maura Healey', open: false, rating: 'SafeD' },
-  { stateAbbr: 'MI', incumbentParty: 'D', incumbentName: null, open: true, rating: 'Tossup' },
+  { stateAbbr: 'MI', incumbentParty: 'D', incumbentName: null, open: true, rating: 'Tossup',
+    demCandidate: 'Jocelyn Benson', repCandidate: 'John James' },
   { stateAbbr: 'MN', incumbentParty: 'D', incumbentName: null, open: true, rating: 'LeanD' },
   { stateAbbr: 'NE', incumbentParty: 'R', incumbentName: 'Jim Pillen', open: false, rating: 'SafeR' },
   { stateAbbr: 'NV', incumbentParty: 'R', incumbentName: 'Joe Lombardo', open: false, rating: 'LeanR' },
@@ -50,10 +51,16 @@ export const GOVERNOR_RACES: GovernorRace[] = RAW.map((r) => ({
 }));
 
 /** Same idea as computeSenateRaces — individually polled, so a lighter weight. */
-export function computeGovernorRaces(currentGcbRMargin: number, weight = 0.25): GovernorRace[] {
+export function computeGovernorRaces(
+  currentGcbRMargin: number,
+  weight = 0.25,
+  liveMargins: Record<string, number> = {}
+): GovernorRace[] {
   return GOVERNOR_RACES.map((r) => {
-    const ownMargin = rProbToPseudoMargin(RATING_R_PROB[r.rating]);
-    const shifted = applyEnvironmentShiftMargin(ownMargin, PREVIOUS_GCB_R_MARGIN, currentGcbRMargin, weight);
-    return { ...r, rating: ratingFromRProb(pseudoMarginToRProb(shifted)) };
+    const realBaseline = liveMargins[r.id] ?? r.pollMargin ?? undefined;
+    const ownMargin = realBaseline ?? rProbToPseudoMargin(RATING_R_PROB[r.rating]);
+    const effectiveWeight = realBaseline !== undefined ? Math.min(weight, 0.1) : weight;
+    const shifted = applyEnvironmentShiftMargin(ownMargin, PREVIOUS_GCB_R_MARGIN, currentGcbRMargin, effectiveWeight);
+    return { ...r, rating: ratingFromRProb(pseudoMarginToRProb(shifted)), computedMargin: shifted };
   });
 }

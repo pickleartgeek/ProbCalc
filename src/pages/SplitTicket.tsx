@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { computeSenateRaces } from '../lib/midterms/senateData';
 import { computeGovernorRaces } from '../lib/midterms/governorData';
 import { generateHouseSeats } from '../lib/midterms/houseData';
@@ -7,6 +8,8 @@ import { RATING_ORDER, RATING_LABEL, RATING_COLOR } from '../lib/midterms/rating
 import { PREVIOUS_GCB_R_MARGIN, DEFAULT_CURRENT_GCB_R_MARGIN, STATE_PVI_2024_FALLBACK } from '../lib/midterms/stateGrid';
 import { loadRealStatePVI } from '../lib/midterms/precinctAnchor';
 import { loadSenatePrecinctAnchor, type SenatePrecinctAnchor } from '../lib/midterms/senatePrecinctAnchor';
+import { loadLivePolls, type LivePollEntry } from '../lib/midterms/livePollData';
+import { recordGcbSnapshot, recordRaceMargins, getGcbHistory } from '../lib/midterms/gcbHistory';
 import { StateTileMap } from '../components/midterms/StateTileMap';
 import { HouseMosaic } from '../components/midterms/HouseMosaic';
 import { ControlGauge } from '../components/midterms/ControlGauge';
@@ -52,6 +55,11 @@ export function SplitTicket() {
   // becomes the "universal shift" applied to the rest. See senatePrecinctAnchor.ts.
   const [senateAnchor, setSenateAnchor] = useState<SenatePrecinctAnchor | null>(null);
 
+  // Auto-refreshed poll averages from scripts/fetch-polls.mts (runs on a
+  // schedule — see .github/workflows/deploy.yml). Supersedes the hand-entered
+  // pollMargin snapshots in senateData.ts/governorData.ts once present.
+  const [livePolls, setLivePolls] = useState<Record<string, LivePollEntry>>({});
+
   useEffect(() => {
     let cancelled = false;
     loadRealStatePVI().then(({ margins, realStates, precinctCount }) => {
@@ -62,6 +70,10 @@ export function SplitTicket() {
     loadSenatePrecinctAnchor().then((anchor) => {
       if (cancelled) return;
       setSenateAnchor(anchor);
+    });
+    loadLivePolls().then((polls) => {
+      if (cancelled) return;
+      setLivePolls(polls);
     });
     return () => {
       cancelled = true;
@@ -74,11 +86,19 @@ export function SplitTicket() {
   // individually polled and the shift is just a nudge on top of that. The
   // House's state-level anchor (statePvi) is now the real precinct-derived
   // margin rather than an approximation.
-  const SENATE_RACES = useMemo(
-    () => computeSenateRaces(currentGcb, 0.25, senateAnchor?.baselineSenateMargins),
-    [currentGcb, senateAnchor]
+  const liveMarginsById = useMemo(
+    () => Object.fromEntries(Object.entries(livePolls).map(([id, e]) => [id, e.margin])),
+    [livePolls]
   );
-  const GOVERNOR_RACES = useMemo(() => computeGovernorRaces(currentGcb, 0.25), [currentGcb]);
+
+  const SENATE_RACES = useMemo(
+    () => computeSenateRaces(currentGcb, 0.25, senateAnchor?.baselineSenateMargins, liveMarginsById),
+    [currentGcb, senateAnchor, liveMarginsById]
+  );
+  const GOVERNOR_RACES = useMemo(
+    () => computeGovernorRaces(currentGcb, 0.25, liveMarginsById),
+    [currentGcb, liveMarginsById]
+  );
   const HOUSE_SEATS = useMemo(() => generateHouseSeats(currentGcb, statePvi), [currentGcb, statePvi]);
 
   const senateSim = useMemo(() => simulateChamber(SENATE_RACES, SENATE_BASELINE, 'senate-2026'), [SENATE_RACES]);
@@ -103,6 +123,34 @@ export function SplitTicket() {
 
   const selectedSenate = selectedState ? SENATE_RACES.find((r) => r.stateAbbr === selectedState) : null;
   const selectedGov = selectedState ? GOVERNOR_RACES.find((r) => r.stateAbbr === selectedState) : null;
+
+  // Records this reading into the local GCB/race-margin history (see
+  // gcbHistory.ts) so the trend chart below has something beyond a single
+  // point. Debounced so dragging the slider doesn't write on every pixel of
+  // movement — only once you pause, and only if the reading actually moved.
+  const [historyTick, setHistoryTick] = useState(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      recordGcbSnapshot(currentGcb, senateSim.pRControl, houseSim.pRControl, governorSim.pRControl);
+      const margins: Record<string, number> = {};
+      for (const r of SENATE_RACES) if (r.computedMargin !== undefined) margins[r.id] = r.computedMargin;
+      for (const r of GOVERNOR_RACES) if (r.computedMargin !== undefined) margins[r.id] = r.computedMargin;
+      recordRaceMargins(margins);
+      setHistoryTick((t) => t + 1); // nudge the chart to re-read localStorage
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [currentGcb, senateSim.pRControl, houseSim.pRControl, governorSim.pRControl, SENATE_RACES, GOVERNOR_RACES]);
+
+  const gcbTrend = useMemo(() => {
+    void historyTick; // dependency only — re-reads localStorage after each recorded snapshot
+    return getGcbHistory().map((s, i) => ({
+      i,
+      gcb: Number(s.gcb.toFixed(2)),
+      'Senate R%': Math.round(s.senateR * 100),
+      'House R%': Math.round(s.houseR * 100),
+      'Governors R%': Math.round(s.govR * 100),
+    }));
+  }, [historyTick]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
@@ -195,6 +243,37 @@ export function SplitTicket() {
 
       {tab === 'overview' && (
         <div className="space-y-6">
+          {gcbTrend.length >= 2 && (
+            <div className="bg-panel border border-hairline rounded-lg px-5 py-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide">
+                  GCB &amp; chamber odds — this session
+                </h3>
+                <span className="text-ink-dim text-[11px] font-data">{gcbTrend.length} readings explored</span>
+              </div>
+              <div style={{ width: '100%', height: 180 }}>
+                <ResponsiveContainer>
+                  <LineChart data={gcbTrend} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline, #2a3348)" opacity={0.3} />
+                    <XAxis dataKey="i" hide />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={32} />
+                    <Tooltip
+                      contentStyle={{ background: '#12172a', border: '1px solid #2a3348', fontSize: 11, fontFamily: 'monospace' }}
+                      labelFormatter={(i) => `Reading #${Number(i) + 1}`}
+                    />
+                    <Line type="monotone" dataKey="Senate R%" stroke="#ea4b4b" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="House R%" stroke="#f5c542" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="Governors R%" stroke="#3b82f6" dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-ink-dim text-[11px] mt-1">
+                Not historical polling — this traces P(R control) each time you've moved the GCB slider this
+                session, persisted locally so it builds up over time as you explore scenarios.
+              </p>
+            </div>
+          )}
+
           <div className="bg-panel-raised border border-hairline-bright rounded-lg px-5 py-4">
             <h3 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide mb-2">
               Headline
@@ -228,17 +307,48 @@ export function SplitTicket() {
               {selectedSenate && (
                 <div>
                   <div className="text-ink-dim text-xs uppercase tracking-wide mb-1">Senate &middot; {selectedSenate.stateName}</div>
-                  <div className="font-display font-700">
-                    {selectedSenate.open ? 'Open seat' : selectedSenate.incumbentName} ({selectedSenate.incumbentParty})
-                  </div>
+                  {selectedSenate.demCandidate || selectedSenate.repCandidate ? (
+                    <div className="font-display font-700">
+                      <span className="text-cyan">{selectedSenate.demCandidate ?? '?'} (D)</span>
+                      {' vs '}
+                      <span className="text-red-call">{selectedSenate.repCandidate ?? '?'} (R)</span>
+                    </div>
+                  ) : (
+                    <div className="font-display font-700">
+                      {selectedSenate.open ? 'Open seat' : selectedSenate.incumbentName} ({selectedSenate.incumbentParty})
+                    </div>
+                  )}
+                  {livePolls[selectedSenate.id] ? (
+                    <div className="text-cyan text-[11px] font-data mt-1">
+                      &#9679; Live: {gcbLabel(livePolls[selectedSenate.id].margin)} avg from{' '}
+                      {livePolls[selectedSenate.id].includedPolls} polls &mdash; auto-updated{' '}
+                      {new Date(livePolls[selectedSenate.id].asOf).toLocaleDateString()}
+                    </div>
+                  ) : (
+                    selectedSenate.pollMargin != null &&
+                    selectedSenate.pollSource && (
+                      <div className="text-ink-dim text-[11px] font-data mt-1">
+                        Real polling: {gcbLabel(selectedSenate.pollMargin)} avg &mdash; {selectedSenate.pollSource}
+                        {selectedSenate.pollAsOf ? ` (as of ${selectedSenate.pollAsOf})` : ''}
+                      </div>
+                    )
+                  )}
                 </div>
               )}
               {selectedGov && (
                 <div>
                   <div className="text-ink-dim text-xs uppercase tracking-wide mb-1">Governor &middot; {selectedGov.stateName}</div>
-                  <div className="font-display font-700">
-                    {selectedGov.open ? 'Open seat' : selectedGov.incumbentName} ({selectedGov.incumbentParty})
-                  </div>
+                  {selectedGov.demCandidate || selectedGov.repCandidate ? (
+                    <div className="font-display font-700">
+                      <span className="text-cyan">{selectedGov.demCandidate ?? '?'} (D)</span>
+                      {' vs '}
+                      <span className="text-red-call">{selectedGov.repCandidate ?? '?'} (R)</span>
+                    </div>
+                  ) : (
+                    <div className="font-display font-700">
+                      {selectedGov.open ? 'Open seat' : selectedGov.incumbentName} ({selectedGov.incumbentParty})
+                    </div>
+                  )}
                 </div>
               )}
             </div>

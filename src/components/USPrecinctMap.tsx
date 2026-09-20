@@ -42,6 +42,7 @@ export function USPrecinctMap({ mode }: Props) {
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState<ProjectedFeature | null>(null);
   const [simTick, setSimTick] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const abortRef = useRef(0);
 
   useEffect(() => {
@@ -56,6 +57,13 @@ export function USPrecinctMap({ mode }: Props) {
     const myRun = ++abortRef.current;
     setLoading(true);
     setResults(null);
+    setPinned(null);
+    setLoadError(null);
+    // Was previously an unhandled rejection on failure — a state whose file
+    // was slow, malformed, or briefly unavailable (CA's ~51MB is by far the
+    // largest of any state, so it's the most likely to hit a real-world
+    // hiccup) would just silently never render anything, with no error
+    // visible anywhere. Now it surfaces.
     loadTopoLayer(`${import.meta.env.BASE_URL}data/precincts/${selected}.json`, 'tiles', {
       idProperty: 'GEOID',
       width: WIDTH,
@@ -70,6 +78,13 @@ export function USPrecinctMap({ mode }: Props) {
             { idProperty: 'GEOID' }
           )
         );
+      })
+      .catch((err) => {
+        if (abortRef.current !== myRun) return;
+        console.error(`Failed to load precincts for ${selected}:`, err);
+        setLoadError(err instanceof Error ? err.message : String(err));
+        setRawLayer(null);
+        setResults(null);
       })
       .finally(() => {
         if (abortRef.current === myRun) setLoading(false);
@@ -95,6 +110,25 @@ export function USPrecinctMap({ mode }: Props) {
 
   const resultsById = useMemo(() => new Map((displayResults ?? []).map((r) => [r.id, r])), [displayResults]);
   const hoveredResult = hovered ? resultsById.get(hovered.id) : null;
+
+  const [pinned, setPinned] = useState<{ feature: ProjectedFeature; x: number; y: number } | null>(null);
+  const pinnedResult = pinned ? resultsById.get(pinned.feature.id) : null;
+
+  // Was rebuilt as a brand-new array/object on every render (including every
+  // mousemove-driven hover update) — PrecinctCanvas's "don't re-fit if it's
+  // the same layer" check compares object identity, so a fresh object every
+  // frame meant it re-fit (resetting pan/zoom) constantly, most noticeably
+  // right as you stopped interacting to click something. Memoizing on the
+  // actual data dependencies fixes that: identity only changes when the
+  // precinct data or results genuinely change. Must live above the
+  // `if (selected)` branch below — hooks can't be called conditionally.
+  const layerForCanvas = useMemo(
+    () =>
+      rawLayer
+        ? { ...rawLayer, features: rawLayer.features.map((f) => ({ ...f, properties: { ...f.properties, result: resultsById.get(f.id) } })) }
+        : null,
+    [rawLayer, resultsById]
+  );
 
   const stateAggregate = useMemo(() => {
     if (!displayResults) return null;
@@ -125,9 +159,6 @@ export function USPrecinctMap({ mode }: Props) {
   }, [manifest]);
 
   if (selected) {
-    const layerForCanvas = rawLayer
-      ? { ...rawLayer, features: rawLayer.features.map((f) => ({ ...f, properties: { ...f.properties, result: resultsById.get(f.id) } })) }
-      : null;
 
     return (
       <div>
@@ -152,12 +183,61 @@ export function USPrecinctMap({ mode }: Props) {
               loading precincts…
             </div>
           )}
+          {loadError && !loading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-void/90 font-data text-sm text-red-call px-6 text-center">
+              <span>Failed to load {selected}: {loadError}</span>
+              <button
+                onClick={() => setSelected((s) => (s ? `${s}` : s))}
+                className="text-ink-dim hover:text-ink text-xs underline"
+              >
+                (check the browser console for details, or try re-selecting the state)
+              </button>
+            </div>
+          )}
           <PrecinctCanvas
             layer={layerForCanvas}
             colorScale={(_, f) => colorScale((f.properties as { result?: PrecinctResult }).result)}
             onHover={setHovered}
+            onClick={(f, event) => {
+              const rect = (event.currentTarget as HTMLElement).getBoundingClientRect?.();
+              setPinned({
+                feature: f,
+                x: event.clientX - (rect?.left ?? 0),
+                y: event.clientY - (rect?.top ?? 0),
+              });
+            }}
             background="#0a0e17"
           />
+          {pinned && pinnedResult && (
+            <div
+              className="absolute z-20 bg-panel-raised border border-hairline-bright rounded-md shadow-lg px-3 py-2 text-xs font-data pointer-events-none max-w-[220px]"
+              style={{
+                left: Math.min(pinned.x + 12, 900 - 230),
+                top: Math.max(pinned.y - 12, 8),
+              }}
+            >
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <span className="text-ink font-semibold">Precinct {pinnedResult.id}</span>
+                <button
+                  onClick={() => setPinned(null)}
+                  className="pointer-events-auto text-ink-dim hover:text-ink leading-none"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              {Object.entries(pinnedResult.candidates)
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, v]) => (
+                  <div key={name} className="flex justify-between gap-4">
+                    <span className="text-ink-dim">{name}</span>
+                    <span>
+                      {mode === 'prob' ? `${((v / (pinnedResult.total || 1)) * 100).toFixed(1)}%` : Math.round(v).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-4 mt-3 text-xs font-data">

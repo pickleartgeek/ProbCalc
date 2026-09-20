@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import { select } from 'd3-selection';
 import { zoom as d3zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
 import { PrecinctIndex } from '../../lib/precinct/spatialIndex';
@@ -10,7 +10,7 @@ interface Props {
   colorScale: ColorScale;
   values?: Record<string, number | undefined>;
   onHover?: (feature: ProjectedFeature | null) => void;
-  onClick?: (feature: ProjectedFeature) => void;
+  onClick?: (feature: ProjectedFeature, event: ReactMouseEvent) => void;
   strokeColor?: string;
   background?: string;
   className?: string;
@@ -315,7 +315,7 @@ export function PrecinctCanvas({
         onMouseLeave={() => onHover?.(null)}
         onClick={(e) => {
           const f = pick(e.clientX, e.clientY);
-          if (f) onClick?.(f);
+          if (f) onClick?.(f, e);
         }}
       />
     </div>

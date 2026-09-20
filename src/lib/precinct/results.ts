@@ -341,7 +341,14 @@ export function twoPoleMarginScale(
 
 function lerpDiverging(t: number, colorPos: string, mid: string, colorNeg: string): string {
   const clamped = Math.max(-1, Math.min(1, t));
-  const [c1, c2, f] = clamped >= 0 ? [mid, colorPos, clamped] : [mid, colorNeg, -clamped];
+  // Raw |t| spends most real-world precincts (margins clustering in the
+  // 10-40 point range, i.e. |t| well under 1) close to the gray midpoint —
+  // that's what was reading as "washed out." A sub-1 exponent front-loads
+  // saturation so moderate margins reach a visibly partisan color much
+  // sooner, while true 50/50 precincts still land exactly on neutral.
+  const SATURATION_CURVE = 0.55;
+  const eased = Math.sign(clamped) * Math.pow(Math.abs(clamped), SATURATION_CURVE);
+  const [c1, c2, f] = eased >= 0 ? [mid, colorPos, eased] : [mid, colorNeg, -eased];
   return lerpHex(c1, c2, f);
 }
 

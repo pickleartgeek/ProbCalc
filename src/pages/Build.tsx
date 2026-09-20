@@ -45,6 +45,10 @@ export function Build() {
   const [wikiError, setWikiError] = useState<string | null>(null);
   const [wikiFetchedFrom, setWikiFetchedFrom] = useState<string | null>(null);
 
+  const [baselineState, setBaselineState] = useState('');
+  const [baselineError, setBaselineError] = useState<string | null>(null);
+  const [baselineLoading, setBaselineLoading] = useState(false);
+
   const canParse = raw.trim().length > 20;
 
   async function handleFetchFromWikipedia() {
@@ -70,6 +74,82 @@ export function Build() {
     setRowCount(result.rows.length);
     setWarnings(result.warnings);
     setFormat(result.format);
+  }
+
+  /**
+   * Pulls a real 2024 result off the same precinct data Split Ticket uses
+   * (precinctAnchor.ts for President, senatePrecinctAnchor.ts for the
+   * real-vs-president ticket-split) and drops it in as a heavily-weighted,
+   * real-dated row — not a fabricated "election result" ground-truth row
+   * (those are explicitly excluded from BaseCalc's math), but an actual
+   * poll-shaped row with sample size = real total votes cast. It behaves
+   * exactly like the guide's weighting formula intends: a strong prior that
+   * naturally fades relative to fresher polls as the election approaches,
+   * rather than a hardcoded starting number.
+   */
+  async function handleImportBaseline(office: 'president' | 'senate') {
+    const abbr = baselineState.trim().toUpperCase();
+    if (abbr.length !== 2) {
+      setBaselineError('Enter a two-letter state abbreviation, e.g. "PA".');
+      return;
+    }
+    setBaselineLoading(true);
+    setBaselineError(null);
+    try {
+      let marginRPositive: number | null = null;
+      let label: string;
+      if (office === 'president') {
+        const { loadRealStatePVI } = await import('../lib/midterms/precinctAnchor');
+        const { margins, realStates } = await loadRealStatePVI();
+        if (!realStates.has(abbr)) {
+          setBaselineError(`No real precinct data loaded for ${abbr} yet.`);
+          return;
+        }
+        marginRPositive = margins[abbr] ?? null;
+        label = '2024 President result (real precincts)';
+      } else {
+        const { loadSenatePrecinctAnchor } = await import('../lib/midterms/senatePrecinctAnchor');
+        const anchor = await loadSenatePrecinctAnchor();
+        if (!anchor.realStates.has(abbr)) {
+          setBaselineError(`${abbr} had no 2024 U.S. Senate race — try "president" instead.`);
+          return;
+        }
+        marginRPositive = anchor.realSenateMargins[abbr] ?? null;
+        label = '2024 Senate result (real precincts)';
+      }
+      if (marginRPositive === null) {
+        setBaselineError(`No data found for "${abbr}".`);
+        return;
+      }
+
+      const repPct = 50 + marginRPositive / 2;
+      const demPct = 50 - marginRPositive / 2;
+
+      setParties((prev) => {
+        const hasBoth = prev.some((p) => p.id === 'republican') && prev.some((p) => p.id === 'democrat');
+        if (hasBoth) return prev;
+        const rep: Party = { id: 'republican', name: 'Republican', shortName: 'GOP', color: '#ea4b4b' };
+        const dem: Party = { id: 'democrat', name: 'Democrat', shortName: 'Dem', color: '#3b82f6' };
+        return [...prev.filter((p) => p.id !== 'republican' && p.id !== 'democrat'), rep, dem];
+      });
+      setParsedRows((prev) => [
+        ...prev,
+        {
+          id: `baseline-${Date.now()}`,
+          firm: label,
+          fieldworkStart: '2024-11-05',
+          fieldworkEnd: '2024-11-05',
+          fieldworkRaw: '2024-11-05',
+          sampleSize: 50000,
+          values: { republican: repPct, democrat: demPct },
+          isElectionResult: false,
+        },
+      ]);
+      setRowCount((c) => c + 1);
+      if (format === 'unknown') setFormat('plain');
+    } finally {
+      setBaselineLoading(false);
+    }
   }
 
   const previewCount = useMemo(
@@ -275,6 +355,36 @@ export function Build() {
               </p>
             )}
             {wikiError && <p className="text-red-call text-[11px] font-data mb-2">{wikiError}</p>}
+
+            <div className="flex items-center gap-2 mb-3 pt-3 border-t border-hairline">
+              <input
+                value={baselineState}
+                onChange={(e) => setBaselineState(e.target.value)}
+                placeholder="State abbr, e.g. PA"
+                maxLength={2}
+                className="w-28 bg-panel-raised border border-hairline rounded px-3 py-2 text-xs font-data outline-none focus:border-hairline-bright uppercase"
+              />
+              <button
+                onClick={() => handleImportBaseline('president')}
+                disabled={baselineState.trim().length !== 2 || baselineLoading}
+                className="px-3 py-2 bg-panel-raised border border-hairline-bright rounded text-xs font-data text-gold disabled:opacity-30 disabled:cursor-not-allowed hover:border-gold whitespace-nowrap"
+              >
+                {baselineLoading ? 'Loading…' : 'Import 2024 President baseline'}
+              </button>
+              <button
+                onClick={() => handleImportBaseline('senate')}
+                disabled={baselineState.trim().length !== 2 || baselineLoading}
+                className="px-3 py-2 bg-panel-raised border border-hairline-bright rounded text-xs font-data text-gold disabled:opacity-30 disabled:cursor-not-allowed hover:border-gold whitespace-nowrap"
+              >
+                {baselineLoading ? 'Loading…' : 'Import 2024 Senate baseline'}
+              </button>
+            </div>
+            <p className="text-ink-dim text-[11px] font-data mb-2">
+              Pulls the real, precinct-verified 2024 result for a U.S. state off the same data Split Ticket
+              uses, and drops it in as a heavily-weighted, real-dated row (not a hardcoded number) — it fades
+              naturally as fresher polls accumulate, per the guide's own weighting formula.
+            </p>
+            {baselineError && <p className="text-red-call text-[11px] font-data mb-2">{baselineError}</p>}
             <textarea
               value={raw}
               onChange={(e) => setRaw(e.target.value)}

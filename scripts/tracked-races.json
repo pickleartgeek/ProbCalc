@@ -1,0 +1,51 @@
+[
+  {
+    "raceId": "sen-ga",
+    "chamber": "senate",
+    "stateAbbr": "GA",
+    "wikiPage": "2026 United States Senate election in Georgia",
+    "electionDate": "2026-11-03"
+  },
+  {
+    "raceId": "sen-me",
+    "chamber": "senate",
+    "stateAbbr": "ME",
+    "wikiPage": "2026 United States Senate election in Maine",
+    "electionDate": "2026-11-03"
+  },
+  {
+    "raceId": "sen-mi",
+    "chamber": "senate",
+    "stateAbbr": "MI",
+    "wikiPage": "2026 United States Senate election in Michigan",
+    "electionDate": "2026-11-03"
+  },
+  {
+    "raceId": "sen-nc",
+    "chamber": "senate",
+    "stateAbbr": "NC",
+    "wikiPage": "2026 United States Senate election in North Carolina",
+    "electionDate": "2026-11-03"
+  },
+  {
+    "raceId": "sen-ak",
+    "chamber": "senate",
+    "stateAbbr": "AK",
+    "wikiPage": "2026 United States Senate election in Alaska",
+    "electionDate": "2026-11-03"
+  },
+  {
+    "raceId": "sen-nh",
+    "chamber": "senate",
+    "stateAbbr": "NH",
+    "wikiPage": "2026 United States Senate election in New Hampshire",
+    "electionDate": "2026-11-03"
+  },
+  {
+    "raceId": "gov-mi",
+    "chamber": "governor",
+    "stateAbbr": "MI",
+    "wikiPage": "2026 Michigan gubernatorial election",
+    "electionDate": "2026-11-03"
+  }
+]
