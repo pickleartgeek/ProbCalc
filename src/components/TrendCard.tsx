@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import type { Party } from '../lib/types';
-import { readableOn } from '../lib/partyColors';
+import { readableOn, onDark } from '../lib/partyColors';
 
 interface Snapshot {
   t: string;
@@ -101,7 +101,7 @@ export function TrendCard({ title, region, parties, history, isDemo }: Props) {
                 key={p.id}
                 type="monotone"
                 dataKey={p.id}
-                stroke={p.color}
+                stroke={onDark(p.color)}
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
@@ -114,7 +114,7 @@ export function TrendCard({ title, region, parties, history, isDemo }: Props) {
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
         {rankedLatest.slice(0, 6).map(({ p, v }) => (
           <div key={p.id} className="flex items-center gap-1.5 text-xs">
-            <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: p.color }} />
+            <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: onDark(p.color) }} />
             <span className="text-ink-muted">{p.shortName}</span>
             <span className="font-data" style={{ color: readableOn(p.color, 'dark') }}>
               {(v * 100).toFixed(1)}%

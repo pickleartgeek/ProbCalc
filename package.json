@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsx --test tests/*.test.ts",
+    "regions:local": "node scripts/prepare-germany.mjs .cache/regions/btw25_kerg.csv .cache/regions/wahlkreise public/data/geo && node scripts/prepare-slovakia.mjs .cache/regions/NRSR2023_SK_tab08d.xlsx .cache/regions/obec public/data/geo"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -41,6 +43,8 @@
     "mapshaper": "^0.7.55",
     "oxlint": "^1.79.0",
     "playwright": "^1.62.1",
+    "proj4": "^2.22.0",
+    "read-excel-file": "^9.3.10",
     "tsx": "^4.23.12",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"

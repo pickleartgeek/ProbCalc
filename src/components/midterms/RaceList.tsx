@@ -3,6 +3,8 @@ import { RatingBadge } from './RatingBadge';
 import { RATING_ORDER, type Rating } from '../../lib/midterms/ratings';
 import { getRaceMarginHistory } from '../../lib/midterms/gcbHistory';
 import type { SenateRace, GovernorRace } from '../../lib/midterms/types';
+import { RaceTrendLoader } from '../races/RaceTrend';
+import { midtermRaceDef } from '../../lib/races/registry';
 
 type Race = SenateRace | GovernorRace;
 
@@ -92,10 +94,13 @@ export function RaceList({
 
       <div className="grid sm:grid-cols-2 gap-2.5">
         {filtered.map((r) => (
-          <button
+          <div
             key={r.id}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(r.stateAbbr); } }}
             onClick={() => onSelect?.(r.stateAbbr)}
-            className={`relative overflow-hidden text-left bg-panel border rounded-lg px-4 py-3 transition-colors hover:border-hairline-bright ${
+            className={`relative overflow-hidden text-left cursor-pointer bg-panel border rounded-lg px-4 py-3 transition-colors hover:border-hairline-bright ${
               selected === r.stateAbbr ? 'border-gold' : 'border-hairline'
             }`}
           >
@@ -123,8 +128,9 @@ export function RaceList({
                   Model margin: <span className="text-ink-muted">{pviLabel(r.computedMargin)}</span>
                 </div>
               )}
+              {midtermRaceDef(r.id) && <RaceTrendLoader def={midtermRaceDef(r.id)!} />}
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>

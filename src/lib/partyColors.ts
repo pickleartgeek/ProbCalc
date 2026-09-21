@@ -1,20 +1,10 @@
+import { lookupParty, US_DEM, US_REP, US_IND, type PartyCountry } from './partyRegistry';
+
 // A broadcast-desk-friendly fallback palette, cycled when we can't infer a party's real color.
 const FALLBACK_PALETTE = [
   '#E14B4B', '#3E7CB1', '#4FA86B', '#F2B705', '#8A6FD6',
   '#E0864F', '#3FB8AF', '#C24E85', '#7C8A9E', '#B5C24E',
 ];
-
-// Best-effort known-party colors so common real-world parties render correctly out of the box.
-const KNOWN_COLORS: Record<string, string> = {
-  spd: '#E3000F', union: '#000000', cdu: '#000000', csu: '#008AC5',
-  grune: '#1AA037', grüne: '#1AA037', fdp: '#FFED00', afd: '#009EE0',
-  linke: '#BE3075', fw: '#F5A300', bsw: '#7D3F98',
-  gerbsds: '#0033A0', 'gerb-sds': '#0033A0', ppdb: '#F7941D', 'pp-db': '#F7941D',
-  vaz: '#5B2C6F', dps: '#009B77', bspol: '#D2001C', 'bsp-ol': '#D2001C',
-  aps: '#663399', itn: '#00AEEF', mech: '#0B2340', veli: '#8B0000',
-  sb: '#1E88E5', pb: '#004225', siy: '#00A99D',
-  democrat: '#0044CC', democratic: '#0044CC', republican: '#CC0000',
-};
 
 export function slugify(name: string): string {
   return name
@@ -25,10 +15,74 @@ export function slugify(name: string): string {
     .trim();
 }
 
-export function assignColor(index: number, name: string): string {
-  const key = slugify(name);
-  if (KNOWN_COLORS[key]) return KNOWN_COLORS[key];
-  return FALLBACK_PALETTE[index % FALLBACK_PALETTE.length];
+/** Registry colour when the name is a known party (given a country if the caller has one), else a distinct fallback. */
+export function assignColor(index: number, name: string, country?: PartyCountry): string {
+  const hit = lookupParty({ id: slugify(name), name, shortName: name }, country);
+  return hit ? hit.color : FALLBACK_PALETTE[index % FALLBACK_PALETTE.length];
+}
+
+// ---- US-style affiliation handling ------------------------------------------------
+// Wikipedia's US polling tables name columns after candidates ("Jon Ossoff<br/>Democratic"),
+// so party identity has to be read out of the header text rather than being the header.
+
+export type Affiliation = 'D' | 'R' | 'I';
+const AFFILIATION_WORDS: [RegExp, Affiliation][] = [
+  [/\b(democratic|democrat|dem)\b/i, 'D'],
+  [/\b(republican|gop|rep)\b/i, 'R'],
+  [/\b(independent|ind)\b/i, 'I'],
+];
+const AFFILIATION_COLOR: Record<Affiliation, string> = { D: US_DEM, R: US_REP, I: US_IND };
+const NAME_SUFFIX = /^(jr|sr|ii|iii|iv|v)\.?$/i;
+
+/** Reads "Democratic"/"Republican"/"Independent" out of a header, if present. */
+export function detectAffiliation(header: string): Affiliation | undefined {
+  for (const [re, aff] of AFFILIATION_WORDS) if (re.test(header)) return aff;
+  return undefined;
+}
+
+/**
+ * "Jon Ossoff Democratic" -> { name: "Jon Ossoff (D)", shortName: "Ossoff" }.
+ * A header that is only the affiliation ("Republican") is left alone. Headers without an
+ * affiliation are returned unchanged, so European party columns behave exactly as before.
+ */
+export function derivePartyLabel(header: string): { name: string; shortName: string; affiliation?: Affiliation } {
+  const affiliation = detectAffiliation(header);
+  const fallback = { name: header, shortName: header.length > 6 ? header.slice(0, 6) : header, affiliation };
+  if (!affiliation) return fallback;
+  let stripped = header;
+  for (const [re] of AFFILIATION_WORDS) stripped = stripped.replace(new RegExp(re.source, 'ig'), ' ');
+  stripped = stripped.replace(/[()/,–-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (stripped.length < 3) return fallback; // header was just "Democratic"
+  const tokens = stripped.split(' ').filter((t) => !NAME_SUFFIX.test(t));
+  const surname = tokens[tokens.length - 1] ?? stripped;
+  return { name: `${stripped} (${affiliation})`, shortName: surname, affiliation };
+}
+
+/** Builds a Party from a header cell. `seen` counts affiliations already used so a 2nd Democrat gets a lighter blue. */
+export function buildPartyFromHeader(header: string, index: number, seen: Partial<Record<Affiliation, number>>): {
+  id: string; name: string; shortName: string; color: string; affiliation?: Affiliation;
+} {
+  const label = derivePartyLabel(header);
+  const id = slugify(header);
+  let color = assignColor(index, header);
+  if (label.affiliation) {
+    const n = seen[label.affiliation] ?? 0;
+    seen[label.affiliation] = n + 1;
+    color = n === 0 ? AFFILIATION_COLOR[label.affiliation] : adjustLightness(AFFILIATION_COLOR[label.affiliation], Math.min(0.3, n * 0.12));
+  }
+  const party = { id, name: label.name, shortName: label.shortName, color } as {
+    id: string; name: string; shortName: string; color: string; affiliation?: Affiliation;
+  };
+  if (label.affiliation) party.affiliation = label.affiliation;
+  return party;
+}
+
+/** Finds the party column carrying a given US affiliation, falling back to the classic ids. */
+export function findByAffiliation<T extends { id: string; affiliation?: Affiliation }>(parties: T[], aff: Affiliation): T | undefined {
+  return (
+    parties.find((p) => p.affiliation === aff) ??
+    parties.find((p) => (aff === 'D' ? /^(democrat|democratic)$/ : aff === 'R' ? /^republican$/ : /^independent$/).test(p.id))
+  );
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -90,6 +144,24 @@ export function readableOn(hex: string, background: 'dark' | 'light'): string {
     return lum < 0.32 ? adjustLightness(hex, 0.4) : hex;
   }
   return lum > 0.6 ? adjustLightness(hex, -0.35) : hex;
+}
+
+/**
+ * A colour safe to FILL on the app's near-black background. Party identity colours can be very dark (Union black,
+ * US Democratic navy) and would vanish as a bar or map region; this mixes them toward white just far enough to reach
+ * a minimum luminance and leaves everything already visible untouched. Use readableOn() for text, this for fills.
+ */
+export function onDark(hex: string | undefined, minLum = 0.11): string {
+  if (!hex) return '#888888';
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const lum = (h: string) => { const [r, g, b] = hexToRgb(h); return relativeLuminance(r, g, b); };
+  if (lum(hex) >= minLum) return hex;
+  // raise HSL lightness in small steps: hue and saturation are kept, so navy stays navy rather than washing to grey
+  for (let d = 0.03; d <= 0.7; d += 0.03) {
+    const out = adjustLightness(hex, d);
+    if (lum(out) >= minLum) return out;
+  }
+  return adjustLightness(hex, 0.7);
 }
 
 /** Largest-remainder allocation of `totalSeats` proportional to each entry's share. */

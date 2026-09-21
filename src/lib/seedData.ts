@@ -1,4 +1,5 @@
 import type { Party } from './types';
+import { registryColor as c, US_DEM, US_REP } from './partyRegistry';
 
 export interface TrackedRace {
   id: string;
@@ -18,15 +19,15 @@ export const TRACKED_RACES: TrackedRace[] = [
     title: '2025 German Federal Election',
     region: 'Germany',
     leader: 'Union',
-    leaderColor: '#000000',
+    leaderColor: c('DE', 'union'),
     leadPct: '+7.7',
     status: 'called',
     isoNumeric: '276',
     parties: [
-      { id: 'union', name: 'Union', shortName: 'Union', color: '#000000' },
-      { id: 'afd', name: 'AfD', shortName: 'AfD', color: '#009EE0' },
-      { id: 'spd', name: 'SPD', shortName: 'SPD', color: '#E3000F' },
-      { id: 'grune', name: 'Grüne', shortName: 'Grüne', color: '#1AA037' },
+      { id: 'union', name: 'Union', shortName: 'Union', color: c('DE', 'union') },
+      { id: 'afd', name: 'AfD', shortName: 'AfD', color: c('DE', 'afd') },
+      { id: 'spd', name: 'SPD', shortName: 'SPD', color: c('DE', 'spd') },
+      { id: 'grune', name: 'Grüne', shortName: 'Grüne', color: c('DE', 'gruene') },
     ],
   },
   {
@@ -34,13 +35,13 @@ export const TRACKED_RACES: TrackedRace[] = [
     title: '2024 Pennsylvania Senate',
     region: 'United States',
     leader: 'McCormick',
-    leaderColor: '#CC0000',
+    leaderColor: US_REP,
     leadPct: '+0.2',
     status: 'called',
     isoNumeric: '840',
     parties: [
-      { id: 'mccormick', name: 'McCormick (R)', shortName: 'McCormick', color: '#CC0000' },
-      { id: 'casey', name: 'Casey (D)', shortName: 'Casey', color: '#0044CC' },
+      { id: 'mccormick', name: 'McCormick (R)', shortName: 'McCormick', color: US_REP },
+      { id: 'casey', name: 'Casey (D)', shortName: 'Casey', color: US_DEM },
     ],
   },
   {
@@ -64,15 +65,15 @@ export const TRACKED_RACES: TrackedRace[] = [
     title: 'Slovakia — NRSR Tracker',
     region: 'Slovakia',
     leader: 'Smer-SD',
-    leaderColor: '#D2001C',
+    leaderColor: c('SK', 'smersd'),
     leadPct: '+4.1',
     status: 'polling',
     isoNumeric: '703',
     parties: [
-      { id: 'smer', name: 'Smer-SD', shortName: 'Smer', color: '#D2001C' },
-      { id: 'ps', name: 'Progresívne Slovensko', shortName: 'PS', color: '#1E88E5' },
-      { id: 'hlas', name: 'Hlas-SD', shortName: 'Hlas', color: '#F5A300' },
-      { id: 'kdh', name: 'KDH', shortName: 'KDH', color: '#663399' },
+      { id: 'smer', name: 'Smer-SD', shortName: 'Smer', color: c('SK', 'smersd') },
+      { id: 'ps', name: 'Progresívne Slovensko', shortName: 'PS', color: c('SK', 'ps') },
+      { id: 'hlas', name: 'Hlas-SD', shortName: 'Hlas', color: c('SK', 'hlassd') },
+      { id: 'kdh', name: 'KDH', shortName: 'KDH', color: c('SK', 'kdh') },
     ],
   },
 ];
@@ -91,8 +92,9 @@ export interface GalleryCountry {
 }
 
 export const GALLERY_COUNTRIES: GalleryCountry[] = [
-  { id: 'de', name: 'Germany', flagEmoji: '🇩🇪', races: 3, system: 'Party List (MMP)', colors: ['#000000', '#E3000F', '#FFED00', '#009EE0', '#1AA037'], isoNumeric: '276' },
-  { id: 'us', name: 'United States', flagEmoji: '🇺🇸', races: 12, system: 'FPTP', colors: ['#0044CC', '#CC0000'], isoNumeric: '840' },
+  { id: 'de', name: 'Germany', flagEmoji: '🇩🇪', races: 3, system: 'Party List (MMP)', colors: [c('DE', 'union'), c('DE', 'spd'), c('DE', 'fdp'), c('DE', 'afd'), c('DE', 'gruene')], isoNumeric: '276' },
+  { id: 'us', name: 'United States', flagEmoji: '🇺🇸', races: 12, system: 'FPTP', colors: [US_DEM, US_REP], isoNumeric: '840' },
   { id: 'bg', name: 'Bulgaria', flagEmoji: '🇧🇬', races: 1, system: "D'Hondt", colors: ['#0033A0', '#F7941D', '#004225', '#D2001C', '#5B2C6F'], isoNumeric: '100' },
-  { id: 'sk', name: 'Slovakia', flagEmoji: '🇸🇰', races: 2, system: "D'Hondt", colors: ['#D2001C', '#1E88E5', '#F5A300', '#663399'], isoNumeric: '703' },
+  { id: 'sk', name: 'Slovakia', flagEmoji: '🇸🇰', races: 2, system: "D'Hondt", colors: [c('SK', 'smersd'), c('SK', 'ps'), c('SK', 'hlassd'), c('SK', 'kdh')], isoNumeric: '703' },
+  { id: 'uk', name: 'United Kingdom', flagEmoji: '🇬🇧', races: 1, system: 'FPTP', colors: [c('UK', 'labour'), c('UK', 'conservative'), c('UK', 'reform'), c('UK', 'libdem'), c('UK', 'green')], isoNumeric: '826' },
 ];

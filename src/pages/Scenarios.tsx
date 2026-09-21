@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { onDark } from '../lib/partyColors';
 import { useEngine } from '../state/store';
 import type { SimulationOutcome } from '../lib/types';
 
@@ -123,7 +124,7 @@ export function Scenarios() {
                 </span>
               )}
               <div className="flex items-center gap-2 mb-2">
-                <span className="w-3 h-3 rounded-sm" style={{ background: winner?.color }} />
+                <span className="w-3 h-3 rounded-sm" style={{ background: onDark(winner?.color) }} />
                 <span className="font-display font-700">{winner?.name}</span>
                 <span className="text-ink-dim text-xs font-data">— {o.marginType}</span>
               </div>

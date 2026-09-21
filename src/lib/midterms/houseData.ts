@@ -67,3 +67,20 @@ export function generateHouseSeats(
 // have the real margins loaded — SplitTicket.tsx passes the real ones in
 // explicitly once precinctAnchor.ts's fetch resolves.
 export const HOUSE_SEATS: HouseSeat[] = generateHouseSeats();
+
+/**
+ * Previous (2024 presidential) margin, R − D in points, for every House district — the SAME
+ * seeded within-state spread generateHouseSeats() uses, so the map baseline and the House
+ * forecast can never disagree. Modelled, not measured: real per-district results are not bundled.
+ * Keys are cd118 ids ("GA-5"; at-large = "AK-0").
+ */
+export function houseDistrictPrevMargins(stateMargins: Record<string, number> = STATE_PVI_2024_FALLBACK): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [abbr, count] of Object.entries(HOUSE_APPORTIONMENT)) {
+    const rand = mulberry32(seedFrom(`house-${abbr}-2026`));
+    const stateMargin = stateMargins[abbr] ?? STATE_PVI_2024_FALLBACK[abbr] ?? 0;
+    const ds = count === 1 ? [0] : Array.from({ length: count }, (_, i) => i + 1);
+    for (const d of ds) out[`${abbr}-${d}`] = stateMargin + (rand() + rand() + rand() - 1.5) * 14;
+  }
+  return out;
+}

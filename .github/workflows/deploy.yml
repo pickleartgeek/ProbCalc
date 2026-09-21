@@ -47,8 +47,31 @@ jobs:
           echo "public/data/precincts contents:"
           ls -la public/data/precincts | head -20
 
+      - name: Fetch and prepare German Wahlkreise + Slovak municipalities
+        # Smallest published division for each country (299 Wahlkreise, ~2,900 obce),
+        # same release the precinct data comes from. -f makes curl fail the job on a 404
+        # instead of silently saving an error page.
+        run: |
+          base="https://github.com/pickleartgeek/ProbCalc/releases/download/united-states"
+          mkdir -p .cache/regions
+          curl -fL -o .cache/regions/btw25_kerg.csv "$base/btw25_kerg.csv"
+          curl -fL -o .cache/regions/wahlkreise.zip "$base/wahlkreise.zip"
+          curl -fL -o .cache/regions/NRSR2023_SK_tab08d.xlsx "$base/NRSR2023_SK_tab08d.xlsx"
+          curl -fL -o .cache/regions/obec_0.zip "$base/obec_0.zip"
+          unzip -o -q .cache/regions/wahlkreise.zip -d .cache/regions/wahlkreise
+          unzip -o -q .cache/regions/obec_0.zip -d .cache/regions/obec
+          mkdir -p public/data/geo
+          node scripts/prepare-germany.mjs .cache/regions/btw25_kerg.csv .cache/regions/wahlkreise public/data/geo
+          node scripts/prepare-slovakia.mjs .cache/regions/NRSR2023_SK_tab08d.xlsx .cache/regions/obec public/data/geo
+          ls -la public/data/geo
+
       - name: Fetch fresh polls (Wikipedia, per scripts/tracked-races.json)
         run: npx tsx scripts/fetch-polls.mts
+
+      - name: Refresh bundled race fallbacks (Wikipedia -> public/data/races)
+        # Every Gallery and Split Ticket race falls back to these files when a visitor's browser cannot reach
+        # Wikipedia live. Never fails the deploy: on an API error the previous file is kept.
+        run: npx tsx scripts/refresh-races.mts
 
       - name: Build
         run: npm run build

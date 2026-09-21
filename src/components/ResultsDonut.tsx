@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import type { Party } from '../lib/types';
+import { onDark } from '../lib/partyColors';
 
 interface Slice {
   partyId: string;
@@ -17,7 +18,7 @@ export function ResultsDonut({ parties, slices, centerLabel, centerSubLabel }: P
   const partyById = Object.fromEntries(parties.map((p) => [p.id, p]));
   const data = slices
     .filter((s) => s.value > 0.001)
-    .map((s) => ({ name: partyById[s.partyId]?.shortName ?? s.partyId, value: s.value, color: partyById[s.partyId]?.color ?? '#888' }));
+    .map((s) => ({ name: partyById[s.partyId]?.shortName ?? s.partyId, value: s.value, color: onDark(partyById[s.partyId]?.color) }));
 
   return (
     <div className="relative flex items-center justify-center">

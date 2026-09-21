@@ -3,6 +3,8 @@ export interface Party {
   name: string;
   shortName: string;
   color: string; // hex
+  /** Set when the column header names a US-style party ("Jon Ossoff Democratic"). Lets D-vs-R logic work on candidate-named columns. */
+  affiliation?: 'D' | 'R' | 'I';
 }
 
 export interface PollRow {
@@ -45,6 +47,15 @@ export interface SimulationConfig {
   environmentShift?: EnvironmentShiftConfig;
 }
 
+/** Which pre-built geography an election maps onto (see lib/geo/presets.ts). */
+export interface RegionBinding {
+  presetId: string;
+  /** 'all' = every region in the preset votes; otherwise the ids of the participating regions. */
+  participants: 'all' | string[];
+  /** Optional user-pasted previous results (see parseBaselineCsv) that override the preset's bundled baseline. */
+  baselineCsv?: string;
+}
+
 export interface ElectionConfig {
   id: string;
   title: string;
@@ -53,6 +64,7 @@ export interface ElectionConfig {
   votingSystem: VotingSystem;
   parties: Party[];
   sim: SimulationConfig;
+  regionBinding?: RegionBinding;
 }
 
 export interface ParsedPollData {
@@ -60,6 +72,8 @@ export interface ParsedPollData {
   rows: PollRow[];
   warnings: string[];
   format: 'plain' | 'wikitext' | 'unknown';
+  /** Present when the source held several tables and one was chosen (e.g. one per hypothetical matchup). */
+  meta?: { tablesFound: number; tableIndex: number; label?: string };
 }
 
 export interface BaseCalcResult {

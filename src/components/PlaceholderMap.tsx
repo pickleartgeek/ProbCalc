@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Party } from '../lib/types';
+import { onDark } from '../lib/partyColors';
 import { mulberry32, seedFrom } from '../lib/mosaicUtil';
 
 interface Props {
@@ -57,7 +58,7 @@ export function PlaceholderMap({ parties, shares, mode, cols = 14, rows = 9, com
             <div
               key={idx}
               className="rounded-[2px] transition-colors duration-500"
-              style={{ background: p?.color ?? '#333' }}
+              style={{ background: onDark(p?.color) }}
               title={p?.name}
             />
           );
