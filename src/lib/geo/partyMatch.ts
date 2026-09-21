@@ -36,6 +36,9 @@ const ALIASES: Record<string, string[]> = {
   dps: ['dps', 'dpsnovobeginning', 'dpsnb'],
 };
 
+/** Pseudo-key meaning "everything in the baseline that no named race party claims" — the previous-election value of "Others". */
+export const REST = '__rest__';
+
 /** partyId -> baseline key (or null = no counterpart; that party simply takes the national swing). */
 export function matchPartiesToBaseline(parties: Party[], keys: { key: string; label: string }[]): Record<string, string | null> {
   const out: Record<string, string | null> = {};
@@ -71,8 +74,8 @@ export function matchPartiesToBaseline(parties: Party[], keys: { key: string; la
     tryKey(p.id, hit?.key);
   }
 
-  // "Others" takes the baseline's others bucket
-  for (const p of parties) if (!(p.id in out) && slugify(p.id) === 'others') tryKey(p.id, keys.find((k) => k.key === 'others')?.key);
+  // "Others" takes whatever the named parties leave over (the Slovak file has 25 parties and no 'others' column at all)
+  for (const p of parties) if (!(p.id in out) && slugify(p.id) === 'others') out[p.id] = REST;
 
   for (const p of parties) if (!(p.id in out)) out[p.id] = null;
   return out;

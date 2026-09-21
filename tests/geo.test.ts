@@ -5,7 +5,7 @@ import path from 'node:path';
 import { loadGeometry, isParticipant } from '../src/lib/geo/loadGeo';
 import { loadBaseline, parseBaselineCsv, usHouseBaseline } from '../src/lib/geo/baselines';
 import { matchPartiesToBaseline } from '../src/lib/geo/partyMatch';
-import { buildReturnsPlan, snapshotAt, unitsFromBaseline, regionalExpectations } from '../src/lib/geo/returns';
+import { buildReturnsPlan, snapshotAt, unitsFromBaseline, regionalExpectations, swingRows, isTwoPartyBaseline, shiftDisplay } from '../src/lib/geo/returns';
 import { inferPreset, resolveScene } from '../src/lib/geo/presets';
 import { STATE_PVI_2024_FALLBACK, HOUSE_APPORTIONMENT } from '../src/lib/midterms/stateGrid';
 import type { Party } from '../src/lib/types';
@@ -166,4 +166,61 @@ test('modelled House baseline is deterministic and anchored on the state margin'
   assert.deepEqual(a.regions['PA-8'], b.regions['PA-8']);
   assert.equal(Object.keys(a.regions).length, 435);
   assert.equal(a.kind, 'modelled');
+});
+
+test('baseline shifts are COMPLETE: every region\'s previous shares sum to 1 across the race parties, Others included', async () => {
+  const sk = await loadBaseline('sk-obce', fetchJson);
+  const skGeo = await loadGeometry('sk-obce', fetchJson);
+  const skParties = ['Smer–SD', 'PS', 'Hlas–SD', 'KDH', 'SaS', 'OĽaNO', 'Republika', 'SNS', 'Others'].map((n) => party(n.toLowerCase().normalize('NFD').replace(/[^a-z]/g, ''), n));
+  const skMap = matchPartiesToBaseline(skParties, sk.keys);
+  assert.equal(skMap.others, '__rest__', 'Others maps to the residual bucket when the baseline has no such column');
+  const { units, prevNational } = unitsFromBaseline(skGeo.features.map((f) => f.properties), sk, skMap);
+  for (const u of units.filter((x) => x.prev)) {
+    const sum = Object.values(u.prev!).reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(sum - 1) < 1e-9, `${u.name}: previous shares sum to ${sum}`);
+  }
+  // 25 parties in the file, 8 named in the poll table -> a real, non-trivial Others share (about 20% in 2023)
+  assert.ok(prevNational.others! > 0.1 && prevNational.others! < 0.35, `Others previous = ${prevNational.others}`);
+  const named = skParties.filter((p) => p.id !== 'others').reduce((a, p) => a + prevNational[p.id]!, 0);
+  assert.ok(Math.abs(named + prevNational.others! - 1) < 1e-9);
+
+  const de = await loadBaseline('de-wahlkreise', fetchJson);
+  const deGeo = await loadGeometry('de-wahlkreise', fetchJson);
+  const deParties = ['Union', 'AfD', 'SPD', 'Greens', 'Linke', 'Others'].map((n) => party(n.toLowerCase(), n)); // BSW, FDP, FW not named -> they are Others
+  const deMap = matchPartiesToBaseline(deParties, de.keys);
+  const d = unitsFromBaseline(deGeo.features.map((f) => f.properties), de, deMap);
+  for (const u of d.units) assert.ok(Math.abs(Object.values(u.prev!).reduce((a, b) => a + b, 0) - 1) < 1e-9);
+  assert.ok(d.prevNational.others! > 0.12, 'BSW+FDP+FW+minor parties were folded into Others');
+});
+
+test('a single-state race leans districts against the STATE, not the country', async () => {
+  const b = await loadBaseline('us-house', fetchJson);
+  const g = await loadGeometry('us-house', fetchJson);
+  const parties = [party('d', 'Ossoff (D)', { affiliation: 'D' }), party('r', 'Collins (R)', { affiliation: 'R' }), party('others', 'Others')];
+  const map = matchPartiesToBaseline(parties, b.keys);
+  const ga = g.features.filter((f) => f.properties.group === 'GA').map((f) => f.properties);
+  const { units, prevNational } = unitsFromBaseline(ga, b, map);
+  const mean = units.reduce((a, u) => a + u.prev!.d * u.votes, 0) / units.reduce((a, u) => a + u.votes, 0);
+  assert.ok(Math.abs(prevNational.d! - mean) < 1e-9, 'reference = the participating districts\' own weighted mean');
+  const usMean = b.national.D;
+  assert.ok(Math.abs(prevNational.d! - usMean) > 0.005, 'and it differs from the national figure, which is what would have double-counted Georgia\'s own lean');
+});
+
+test('two-party baselines are compared like-for-like: poll undecideds do not show up as a phantom shift', () => {
+  // 2024: 49/51 two-party. Poll average: 47/44 with 9% undecided/other -> two-party 51.6/48.4. That is a +2.6 shift for D, not −2 and −7.
+  const rows = swingRows(['d', 'r', 'others'], { d: 0.47, r: 0.44, others: 0.09 }, { d: 'D', r: 'R', others: '__rest__' }, { d: 0.49, r: 0.51, others: 0 }, { twoParty: true });
+  const d = rows.find((r) => r.partyId === 'd')!, r = rows.find((x) => x.partyId === 'r')!, o = rows.find((x) => x.partyId === 'others')!;
+  assert.ok(Math.abs(d.shift! * 100 - 2.6) < 0.1 && Math.abs(r.shift! * 100 + 2.6) < 0.1, `D ${d.shift}, R ${r.shift}`);
+  assert.ok(Math.abs(d.now + r.now - 1) < 1e-9 && Math.abs(d.previous! + r.previous! - 1) < 1e-9);
+  assert.equal(o.shift, undefined);
+  assert.ok(isTwoPartyBaseline([{ key: 'D' }, { key: 'R' }]) && !isTwoPartyBaseline([{ key: 'union' }, { key: 'afd' }]));
+});
+
+test('tooltip rows: two-party baselines compare D and R as a share of the pair; Others carries no shift', () => {
+  const rows = shiftDisplay(['d', 'r', 'others'], { d: 0.41, r: 0.5, others: 0.09 }, { d: 0.45, r: 0.55, others: 0 }, { d: 'D', r: 'R', others: '__rest__' }, true);
+  assert.ok(Math.abs(rows.d.now + rows.r.now - 1) < 1e-9);
+  assert.ok(Math.abs(rows.d.delta! - (41 / 91 - 0.45) * 100) < 1e-9);
+  assert.equal(rows.others.before, undefined);
+  const plain = shiftDisplay(['a', 'b'], { a: 0.3, b: 0.7 }, { a: 0.2, b: 0.8 }, { a: 'x', b: 'y' }, false);
+  assert.ok(Math.abs(plain.a.delta! - 10) < 1e-9);
 });

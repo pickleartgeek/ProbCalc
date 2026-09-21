@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PrecinctCanvas } from './PrecinctCanvas';
 import { loadTopoLayer } from '../../lib/precinct/loadTopo';
 import { extractBakedResults, twoPoleMarginScale, type PrecinctResult } from '../../lib/precinct/results';
 import { USPS_TO_NAME } from '../../lib/usStates';
-import type { ProjectedFeature } from '../../lib/precinct/types';
+import { PrecinctTooltip } from './PrecinctTooltip';
 
 const REP_COLOR = '#ea4b4b';
 const DEM_COLOR = '#3b82f6';
@@ -27,7 +27,6 @@ export function StatePrecinctPanel({ stateAbbr, height = 360 }: Props) {
   const [results, setResults] = useState<PrecinctResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
-  const [hovered, setHovered] = useState<ProjectedFeature | null>(null);
   const abortRef = useRef(0);
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export function StatePrecinctPanel({ stateAbbr, height = 360 }: Props) {
     setError(false);
     setLayer(null);
     setResults(null);
-    setHovered(null);
     loadTopoLayer(`${import.meta.env.BASE_URL}data/precincts/${stateAbbr}.json`, 'tiles', {
       idProperty: 'GEOID',
       width: 900,
@@ -58,11 +56,12 @@ export function StatePrecinctPanel({ stateAbbr, height = 360 }: Props) {
     };
   }, [stateAbbr]);
 
-  const resultsById = new Map((results ?? []).map((r) => [r.id, r]));
-  const hoveredResult = hovered ? resultsById.get(hovered.id) : null;
-  const layerForCanvas = layer
-    ? { ...layer, features: layer.features.map((f) => ({ ...f, properties: { ...f.properties, result: resultsById.get(f.id) } })) }
-    : null;
+  // Memoised: a fresh layer object on every render is what used to snap the zoom back on every hover.
+  const resultsById = useMemo(() => new Map((results ?? []).map((r) => [r.id, r])), [results]);
+  const layerForCanvas = useMemo(
+    () => (layer ? { ...layer, features: layer.features.map((f) => ({ ...f, properties: { ...f.properties, result: resultsById.get(f.id) } })) } : null),
+    [layer, resultsById]
+  );
 
   return (
     <div>
@@ -87,24 +86,12 @@ export function StatePrecinctPanel({ stateAbbr, height = 360 }: Props) {
         <PrecinctCanvas
           layer={layerForCanvas}
           colorScale={(_, f) => colorScale((f.properties as { result?: PrecinctResult }).result)}
-          onHover={setHovered}
+          tooltip={(f) => <PrecinctTooltip result={resultsById.get(f.id)} />}
           background="#0a0e17"
         />
       </div>
 
-      <div className="mt-2 font-data text-xs text-ink-dim min-h-[1.5em]">
-        {hoveredResult ? (
-          <span>
-            precinct {hoveredResult.id} &middot;{' '}
-            {Object.entries(hoveredResult.candidates)
-              .sort((a, b) => b[1] - a[1])
-              .map(([name, v]) => `${name} ${Math.round(v).toLocaleString()}`)
-              .join(' · ')}
-          </span>
-        ) : (
-          'hover a precinct for its raw vote counts · scroll to zoom, drag to pan'
-        )}
-      </div>
+      <p className="mt-2 font-data text-xs text-ink-dim">hover a precinct for its votes · scroll or +/− to zoom, drag to pan — the view stays where you put it</p>
     </div>
   );
 }

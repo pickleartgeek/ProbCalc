@@ -17,18 +17,32 @@ interface PollIndexEntry {
   ok: boolean;
 }
 
-interface PollFile {
+export interface PollFile {
   raceId: string;
   asOf: string;
   includedPolls: number;
   sourcePage: string;
-  parties: { id: string; name: string }[];
+  parties: { id: string; name: string; shortName?: string; affiliation?: 'D' | 'R' | 'I' }[];
   results: { partyId: string; percentage: number }[];
 }
 
-function marginFromResults(file: PollFile): number | null {
-  const rep = file.results.find((r) => r.partyId === 'republican');
-  const dem = file.results.find((r) => r.partyId === 'democrat');
+/**
+ * R − D in points. Wikipedia's US tables name their columns after CANDIDATES ("Jon Ossoff Democratic"), so the party
+ * ids are candidate-derived ("jonossoffdemocratic"), not the literal 'democrat' / 'republican' this used to look for —
+ * which made every live margin silently come back null. The parser now records each column's affiliation; fall back to
+ * the classic ids and to reading "(D)" / "Democratic" out of the name for files written before that.
+ */
+export function marginFromResults(file: PollFile): number | null {
+  const side = (aff: 'D' | 'R', idRe: RegExp, nameRe: RegExp) => {
+    const cands = file.parties.filter((p) => p.affiliation === aff || idRe.test(p.id) || nameRe.test(p.name));
+    // several Democrats/Republicans (a primary table slipped through): take the best-supported one
+    return cands
+      .map((p) => file.results.find((r) => r.partyId === p.id))
+      .filter((r): r is { partyId: string; percentage: number } => !!r)
+      .sort((a, b) => b.percentage - a.percentage)[0];
+  };
+  const rep = side('R', /^republican$/, /\(R\)|republican/i);
+  const dem = side('D', /^democrat(ic)?$/, /\(D\)|democrat/i);
   if (!rep || !dem) return null;
   return (rep.percentage - dem.percentage) * 100;
 }

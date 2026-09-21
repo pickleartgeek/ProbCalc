@@ -13,6 +13,7 @@ import { feature as topoFeature } from 'topojson-client';
 import { geoAlbersUsa, geoPath } from 'd3-geo';
 import type { FeatureCollection, Geometry } from 'geojson';
 import usStatesTopo from '../data/us-states-10m.json';
+import { PrecinctTooltip } from './precinct/PrecinctTooltip';
 import type { ProjectedFeature } from '../lib/precinct/types';
 
 interface ManifestEntry {
@@ -32,15 +33,17 @@ const colorScale = twoPoleMarginScale('REP', 'DEM', REP_COLOR, DEM_COLOR);
 interface Props {
   /** 'base' = real 2024 precinct results. 'prob' = a fresh precinct-level ProbCalc draw. */
   mode: 'base' | 'prob';
+  /** Open straight into this state's precincts (a state-bound race) instead of the national choropleth. */
+  initialState?: string;
 }
 
-export function USPrecinctMap({ mode }: Props) {
+export function USPrecinctMap({ mode, initialState }: Props) {
   const [manifest, setManifest] = useState<ManifestEntry[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialState ?? null);
+  useEffect(() => { if (initialState) setSelected(initialState); }, [initialState]);
   const [results, setResults] = useState<PrecinctResult[] | null>(null);
   const [rawLayer, setRawLayer] = useState<Awaited<ReturnType<typeof loadTopoLayer>> | null>(null);
   const [loading, setLoading] = useState(false);
-  const [hovered, setHovered] = useState<ProjectedFeature | null>(null);
   const [simTick, setSimTick] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const abortRef = useRef(0);
@@ -109,7 +112,6 @@ export function USPrecinctMap({ mode }: Props) {
   }, [results, mode, simTick]);
 
   const resultsById = useMemo(() => new Map((displayResults ?? []).map((r) => [r.id, r])), [displayResults]);
-  const hoveredResult = hovered ? resultsById.get(hovered.id) : null;
 
   const [pinned, setPinned] = useState<{ feature: ProjectedFeature; x: number; y: number } | null>(null);
   const pinnedResult = pinned ? resultsById.get(pinned.feature.id) : null;
@@ -197,7 +199,8 @@ export function USPrecinctMap({ mode }: Props) {
           <PrecinctCanvas
             layer={layerForCanvas}
             colorScale={(_, f) => colorScale((f.properties as { result?: PrecinctResult }).result)}
-            onHover={setHovered}
+            tooltip={(f) => <PrecinctTooltip result={resultsById.get(f.id)} mode={mode} />}
+            drawVersion={simTick}
             onClick={(f, event) => {
               const rect = (event.currentTarget as HTMLElement).getBoundingClientRect?.();
               setPinned({
@@ -242,21 +245,8 @@ export function USPrecinctMap({ mode }: Props) {
 
         <div className="flex flex-wrap gap-4 mt-3 text-xs font-data">
           <div className="flex-1 min-w-[160px]">
-            <p className="text-ink-dim uppercase tracking-wide mb-1">
-              {hoveredResult ? `Precinct ${hoveredResult.id}` : 'Hover a precinct'}
-            </p>
-            {hoveredResult && (
-              <div className="space-y-0.5">
-                {Object.entries(hoveredResult.candidates)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([name, v]) => (
-                    <div key={name} className="flex justify-between gap-4">
-                      <span className="text-ink-dim">{name}</span>
-                      <span>{mode === 'prob' ? `${(v / (hoveredResult.total || 1) * 100).toFixed(1)}%` : Math.round(v).toLocaleString()}</span>
-                    </div>
-                  ))}
-              </div>
-            )}
+            <p className="text-ink-dim uppercase tracking-wide mb-1">Precinct detail</p>
+            <p className="text-ink-dim">hover for votes · click to pin · scroll or +/− to zoom, drag to pan</p>
           </div>
           {stateAggregate && (
             <div className="flex-1 min-w-[160px]">

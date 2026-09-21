@@ -6,12 +6,13 @@ import { runProbCalc } from '../../lib/probCalc';
 import { readableOn, onDark } from '../../lib/partyColors';
 import { attachProbToLatest } from '../../lib/history';
 import { ResultsDonut } from '../../components/ResultsDonut';
-import { PlaceholderMap } from '../../components/PlaceholderMap';
-import { USPrecinctMap } from '../../components/USPrecinctMap';
+import { RaceMap } from '../../components/results/RaceMap';
+import type { GeoScene } from '../../hooks/useGeoScene';
+import { isTwoPartyBaseline } from '../../lib/geo/returns';
 import { DrawsChart } from '../../components/results/DrawsChart';
 
 /** ProbCalc view: win probabilities, Monte Carlo draws, and the district/state mosaic. Runs itself the first time it is opened. */
-export function ProbCalcView({ config, baseCalc, onRan }: { config: ElectionConfig; baseCalc: BaseCalcBundle; onRan?: () => void }) {
+export function ProbCalcView({ config, baseCalc, scene, onRan }: { config: ElectionConfig; baseCalc: BaseCalcBundle; scene: GeoScene; onRan?: () => void }) {
   const { probCalcResults, outcomes, setProbCalcResults } = useEngine();
   const [simulations, setSimulations] = useState(1000);
   const [beta, setBeta] = useState(1);
@@ -19,6 +20,7 @@ export function ProbCalcView({ config, baseCalc, onRan }: { config: ElectionConf
   const [shiftEnabled, setShiftEnabled] = useState(false);
   const [shiftWeight, setShiftWeight] = useState(0.3);
   const defaults = Object.fromEntries(baseCalc.results.map((r) => [r.partyId, +(r.percentage * 100).toFixed(1)]));
+  const [drawIdx, setDrawIdx] = useState(0);
   const [prevEnv, setPrevEnv] = useState<Record<string, number>>(defaults);
   const [curEnv, setCurEnv] = useState<Record<string, number>>(defaults);
 
@@ -32,6 +34,7 @@ export function ProbCalcView({ config, baseCalc, onRan }: { config: ElectionConf
         environmentShift: shiftEnabled ? { enabled: true, previousEnvironment: prevEnv, currentEnvironment: curEnv, weight: shiftWeight } : undefined,
       });
       setProbCalcResults(results, outcomes);
+      setDrawIdx(0);
       attachProbToLatest(config.id, Object.fromEntries(results.map((r) => [r.partyId, r.winProbability])));
       setRunning(false);
       onRan?.();
@@ -54,20 +57,37 @@ export function ProbCalcView({ config, baseCalc, onRan }: { config: ElectionConf
   const leadParty = lead ? partyById[lead.partyId] : undefined;
   const baseShares = Object.fromEntries(baseCalc.results.map((r) => [r.partyId, r.percentage]));
   const mapShares = Object.fromEntries((probCalcResults ?? []).map((r) => [r.partyId, r.winProbability]));
+  // the regional map shows ONE simulated night: this draw's national shares distributed over the regions
+  const drawShares = outcomes && outcomes[drawIdx % Math.max(1, outcomes.length)] ? outcomes[drawIdx % outcomes.length].values : baseShares;
+  const hasBaseline = Object.values(scene.prevNational).some((v) => v !== undefined);
+  const useBaselineAsPrevious = () => {
+    setShiftEnabled(true);
+    // A two-party baseline (US) is scaled to the same D+R mass as the current aggregate, so undecideds and third parties
+    // do not read as both sides falling. Everything else compares share for share.
+    const pairIds = isTwoPartyBaseline(scene.baseline?.keys ?? []) ? config.parties.filter((p) => scene.mapping[p.id] && scene.mapping[p.id] !== '__rest__').map((p) => p.id) : [];
+    const prevSum = pairIds.reduce((a, id) => a + (scene.prevNational[id] ?? 0), 0);
+    const curMass = pairIds.reduce((a, id) => a + (baseShares[id] ?? 0), 0);
+    setPrevEnv(Object.fromEntries(config.parties.map((p) => {
+      const v = pairIds.includes(p.id) && prevSum > 0 ? ((scene.prevNational[p.id] ?? 0) / prevSum) * curMass : scene.prevNational[p.id] ?? baseShares[p.id] ?? 0;
+      return [p.id, +(v * 100).toFixed(1)];
+    })));
+    setCurEnv(defaults);
+  };
 
   return (
     <div className="space-y-6">
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-panel border border-hairline rounded-lg p-5">
-          <h2 className="font-display font-700 text-lg mb-3">
-            {config.region === 'United States' ? 'Simulated precinct-level ProbCalc' : 'Win probability by district'}
-          </h2>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h2 className="font-display font-700 text-lg">One simulated night, by region</h2>
+            {probCalcResults && outcomes && outcomes.length > 1 && (
+              <button onClick={() => setDrawIdx(Math.floor(Math.random() * outcomes.length))} className="px-2.5 py-1 rounded text-xs font-data bg-gold text-void font-semibold hover:brightness-95">↻ New draw</button>
+            )}
+          </div>
           {!probCalcResults ? (
             <div className="h-64 flex items-center justify-center text-ink-dim text-sm font-data">{running ? 'Running Monte Carlo…' : 'No simulation yet'}</div>
-          ) : config.region === 'United States' ? (
-            <USPrecinctMap mode="prob" />
           ) : (
-            <PlaceholderMap parties={config.parties} shares={mapShares} mode="prob" />
+            <RaceMap config={config} mode="prob" aggregate={drawShares} scene={scene} drawKey={drawIdx} mosaicShares={mapShares} />
           )}
         </div>
 
@@ -134,6 +154,11 @@ export function ProbCalcView({ config, baseCalc, onRan }: { config: ElectionConf
         <p className="text-ink-dim text-xs mb-4 max-w-2xl">
           Re-centers each party's alpha around how much the broader environment has moved since your BaseCalc baseline, before sampling. Weight 0 trusts BaseCalc as-is; weight 1 is a full uniform swing.
         </p>
+        {hasBaseline && (
+          <button onClick={useBaselineAsPrevious} className="mb-4 px-3 py-1.5 border border-hairline-bright rounded text-xs font-data text-cyan hover:bg-panel-raised" data-testid="use-baseline">
+            Use the previous election as the baseline →
+          </button>
+        )}
         {shiftEnabled && (
           <div className="space-y-4">
             <div>

@@ -190,19 +190,115 @@ export function snapshotAt(plan: ReturnsPlan, t: number): Snapshot {
   return { t, units, totals, reportedVotes: reported, pctReporting: plan.totalVotes > 0 ? reported / plan.totalVotes : 0, regionsComplete: complete, leads, ranked };
 }
 
-/** Turn a baseline + the party↔key mapping into engine inputs for the participating regions. */
+const REST = '__rest__';
+const isRest = (k: string | null | undefined) => k === REST || k === 'others';
+
+/**
+ * Turn a baseline + the party↔key mapping into engine inputs for the participating regions.
+ *
+ * Two things make the previous-election shift COMPLETE rather than partial:
+ *  - "Others" (and any party mapped to the residual) is everything in the baseline that no named race party claims:
+ *    1 − Σ(claimed parties) in every region. The Slovak baseline has 25 parties; a poll table names ten. The other
+ *    fifteen are not lost, they are Others.
+ *  - The reference for "how far did this region lean" is the vote-weighted mean of the PARTICIPATING regions, not the
+ *    whole country. A Georgia Senate poll average is a statewide number; leaning each district against the national
+ *    result would stack the state's own lean on top of it.
+ */
 export function unitsFromBaseline(
   regions: { id: string; name: string; group?: string }[],
   baseline: RegionBaseline,
   mapping: Record<string, string | null>
 ): { units: UnitInput[]; prevNational: Record<string, number | undefined> } {
-  const prevNational: Record<string, number | undefined> = {};
-  for (const [pid, key] of Object.entries(mapping)) prevNational[pid] = key ? baseline.national[key] : undefined;
+  const claimed = [...new Set(Object.values(mapping).filter((k): k is string => !!k && !isRest(k)))];
   const units: UnitInput[] = regions.map((r) => {
     const b = baseline.regions[r.id];
+    if (!b) return { id: r.id, name: r.name, group: r.group, votes: 1 };
+    const claimedSum = claimed.reduce((a, k) => a + (b.shares[k] ?? 0), 0);
     const prev: Record<string, number> = {};
-    if (b) for (const [pid, key] of Object.entries(mapping)) if (key && b.shares[key] !== undefined) prev[pid] = b.shares[key];
-    return { id: r.id, name: r.name, group: r.group, votes: b?.votes ?? 1, prev: b ? prev : undefined };
+    for (const [pid, key] of Object.entries(mapping)) {
+      if (!key) continue;
+      if (isRest(key)) prev[pid] = Math.max(0, 1 - claimedSum);
+      else if (b.shares[key] !== undefined) prev[pid] = b.shares[key];
+    }
+    return { id: r.id, name: r.name, group: r.group, votes: b.votes, prev };
   });
+  // weighted reference over the regions that actually have baseline data
+  const sums: Record<string, number> = {};
+  let w = 0;
+  for (const u of units) {
+    if (!u.prev) continue;
+    w += u.votes;
+    for (const [pid, v] of Object.entries(u.prev)) sums[pid] = (sums[pid] ?? 0) + v * u.votes;
+  }
+  const prevNational: Record<string, number | undefined> = {};
+  for (const pid of Object.keys(mapping)) prevNational[pid] = mapping[pid] && w > 0 ? (sums[pid] ?? 0) / w : undefined;
   return { units, prevNational };
+}
+
+export interface SwingRow {
+  partyId: string;
+  /** baseline key this party was matched to, REST for the residual bucket, null = no counterpart */
+  key: string | null;
+  previous: number | undefined;
+  now: number;
+  /** now − previous, in fraction points; undefined when there is no previous value */
+  shift: number | undefined;
+}
+
+/**
+ * The previous-election → now table shown next to every regional map: who moved, and by how much.
+ *
+ * `twoParty`: a US precinct/state baseline only knows Democratic and Republican, but a poll average also carries
+ * undecideds and third parties. Comparing 46% in a poll with 51% of a two-party vote would show a phantom "−5". With
+ * this set, every party that has a baseline column is compared as its share of the pair, and unmatched parties show no shift.
+ */
+export function swingRows(
+  partyIds: string[],
+  base: Record<string, number>,
+  mapping: Record<string, string | null>,
+  prevNational: Record<string, number | undefined>,
+  opts: { twoParty?: boolean } = {}
+): SwingRow[] {
+  const named = partyIds.filter((id) => mapping[id] && !isRest(mapping[id]));
+  const nowSum = named.reduce((a, id) => a + (base[id] ?? 0), 0);
+  const prevSum = named.reduce((a, id) => a + (prevNational[id] ?? 0), 0);
+  return partyIds.map((id) => {
+    const key = mapping[id] ?? null;
+    if (opts.twoParty) {
+      if (!key || isRest(key) || nowSum <= 0 || prevSum <= 0) return { partyId: id, key, previous: undefined, now: base[id] ?? 0, shift: undefined };
+      const previous = (prevNational[id] ?? 0) / prevSum;
+      const now = (base[id] ?? 0) / nowSum;
+      return { partyId: id, key, previous, now, shift: now - previous };
+    }
+    const previous = prevNational[id];
+    return { partyId: id, key, previous, now: base[id] ?? 0, shift: previous === undefined ? undefined : (base[id] ?? 0) - previous };
+  });
+}
+
+/** True for baselines that only carry D and R (the US ones). */
+export const isTwoPartyBaseline = (keys: { key: string }[]) => keys.length > 0 && keys.every((k) => k.key === 'D' || k.key === 'R');
+
+/**
+ * One region's rows for a tooltip: previous share, current share, shift. For a two-party baseline the D/R rows are both
+ * expressed as a share of the pair (undecideds and third parties would otherwise read as a fall for both sides).
+ */
+export function shiftDisplay(
+  partyIds: string[],
+  now: Record<string, number>,
+  prev: Record<string, number> | undefined,
+  mapping: Record<string, string | null>,
+  twoParty: boolean
+): Record<string, { before?: number; now: number; delta?: number }> {
+  const pair = twoParty ? partyIds.filter((id) => mapping[id] && !isRest(mapping[id])) : [];
+  const nowSum = pair.reduce((a, id) => a + (now[id] ?? 0), 0);
+  const prevSum = pair.reduce((a, id) => a + (prev?.[id] ?? 0), 0);
+  const out: Record<string, { before?: number; now: number; delta?: number }> = {};
+  for (const id of partyIds) {
+    const inPair = pair.includes(id);
+    if (twoParty && !inPair) { out[id] = { now: now[id] ?? 0 }; continue; }
+    const n = inPair && nowSum > 0 ? (now[id] ?? 0) / nowSum : now[id] ?? 0;
+    const b = prev?.[id] === undefined ? undefined : inPair && prevSum > 0 ? prev[id] / prevSum : prev[id];
+    out[id] = { before: b, now: n, delta: b === undefined ? undefined : (n - b) * 100 };
+  }
+  return out;
 }

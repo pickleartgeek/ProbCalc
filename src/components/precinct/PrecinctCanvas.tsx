@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { select } from 'd3-selection';
 import { zoom as d3zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
 import { PrecinctIndex } from '../../lib/precinct/spatialIndex';
@@ -14,6 +14,12 @@ interface Props {
   strokeColor?: string;
   background?: string;
   className?: string;
+  /** Floating tooltip content for the precinct under the cursor. Owned by the canvas, so hovering never re-renders (or re-fits) the parent. */
+  tooltip?: (feature: ProjectedFeature) => ReactNode;
+  /** Bump to force a repaint when colours changed but the layer did not (e.g. election-night playback). */
+  drawVersion?: number;
+  /** Zoom +/−/reset buttons. Default on. */
+  controls?: boolean;
   /** Surfaces perf numbers for tuning — the demo/stress-test page uses this. */
   onFrameStats?: (stats: { drawn: number; total: number; ms: number }) => void;
 }
@@ -37,6 +43,9 @@ export function PrecinctCanvas({
   strokeColor = 'rgba(10,14,23,0.5)',
   background = 'transparent',
   className,
+  tooltip,
+  drawVersion = 0,
+  controls = true,
   onFrameStats,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,6 +56,18 @@ export function PrecinctCanvas({
   const rafRef = useRef<number | null>(null);
   const zoomBehaviorRef = useRef<ReturnType<typeof d3zoom<HTMLDivElement, unknown>> | null>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
+  const [fitTick, setFitTick] = useState(0);
+  const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverRef = useRef<ProjectedFeature | null>(null);
+  const [hover, setHover] = useState<{ f: ProjectedFeature; x: number; y: number } | null>(null);
+
+  // What "the same layer" means for view purposes: same geometry footprint. A caller that hands over a fresh
+  // object with identical content on every render (this used to reset zoom on every hover) must not move the camera.
+  const layerKey = useMemo(() => {
+    if (!layer) return '';
+    const f = layer.features;
+    return `${f.length}|${layer.bounds.map((n) => Math.round(n)).join(',')}|${f[0]?.id}|${f[f.length - 1]?.id}`;
+  }, [layer]);
 
   useEffect(() => {
     indexRef.current = layer ? new PrecinctIndex(layer) : null;
@@ -215,6 +236,38 @@ export function PrecinctCanvas({
   const latestDrawPickRef = useRef(drawPick);
   latestDrawPickRef.current = drawPick;
 
+  // Outline of the precinct under the cursor, on its own transparent canvas so moving the mouse never repaints the map.
+  const drawHighlight = useCallback(() => {
+    const c = hoverCanvasRef.current;
+    if (!c) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (c.width !== size.w * dpr || c.height !== size.h * dpr) { c.width = size.w * dpr; c.height = size.h * dpr; }
+    const ctx = c.getContext('2d')!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+    const f = hoverRef.current;
+    if (!f) return;
+    const t = transformRef.current;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.translate(t.x, t.y);
+    ctx.scale(t.k, t.k);
+    ctx.beginPath();
+    for (const ring of f.rings) {
+      ctx.moveTo(ring[0], ring[1]);
+      for (let j = 2; j < ring.length; j += 2) ctx.lineTo(ring[j], ring[j + 1]);
+      ctx.closePath();
+    }
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3 / t.k;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.stroke();
+    ctx.lineWidth = 1.6 / t.k;
+    ctx.strokeStyle = '#f2b705';
+    ctx.stroke();
+  }, [size]);
+  const latestHighlightRef = useRef(drawHighlight);
+  latestHighlightRef.current = drawHighlight;
+
   const scheduleDraw = useCallback(() => {
     if (rafRef.current != null) return;
     rafRef.current = requestAnimationFrame(() => {
@@ -226,7 +279,7 @@ export function PrecinctCanvas({
 
   useEffect(() => {
     scheduleDraw();
-  }, [scheduleDraw]);
+  }, [scheduleDraw, layer, drawVersion]);
 
   useEffect(() => {
     const overlay = containerRef.current;
@@ -236,6 +289,7 @@ export function PrecinctCanvas({
       .scaleExtent([0.02, 40])
       .on('zoom', (event: D3ZoomEvent<HTMLDivElement, unknown>) => {
         transformRef.current = event.transform;
+        latestHighlightRef.current();
         // During active drag/zoom, only the cheap batched-fill canvas
         // repaints every frame; picking catches up 150ms after it settles.
         // Same latest-ref indirection as scheduleDraw above, for the same reason.
@@ -261,17 +315,20 @@ export function PrecinctCanvas({
   // for anything concentrated in one region of that space (a single country's
   // shape sitting inside a larger reference bounding box, say), where you'd
   // otherwise be looking at an empty corner.
-  const fittedLayerRef = useRef<ProjectedLayer | null>(null);
+  const fittedKeyRef = useRef('');
+  const layerRef = useRef(layer);
+  layerRef.current = layer;
   const fittedSizeRef = useRef({ w: 0, h: 0 });
   useEffect(() => {
     const overlay = containerRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
+    const layer = layerRef.current;
     if (!overlay || !zoomBehavior || !layer) return;
     const sizeChangedALot =
       Math.abs(size.w - fittedSizeRef.current.w) > fittedSizeRef.current.w * 0.2 ||
       Math.abs(size.h - fittedSizeRef.current.h) > fittedSizeRef.current.h * 0.2;
-    if (fittedLayerRef.current === layer && !sizeChangedALot) return; // don't fight the user's own pan/zoom
-    fittedLayerRef.current = layer;
+    if (fittedKeyRef.current === layerKey && !sizeChangedALot) return; // never fight the user's own pan/zoom
+    fittedKeyRef.current = layerKey;
     fittedSizeRef.current = { w: size.w, h: size.h };
     const [minX, minY, maxX, maxY] = layer.bounds;
     const contentW = Math.max(1, maxX - minX);
@@ -282,7 +339,7 @@ export function PrecinctCanvas({
     const ty = size.h / 2 - k * (minY + contentH / 2);
     const fitTransform = zoomIdentity.translate(tx, ty).scale(k);
     select(overlay).call(zoomBehavior.transform, fitTransform);
-  }, [layer, size.w, size.h]);
+  }, [layerKey, size.w, size.h, fitTick]);
 
   function pick(clientX: number, clientY: number): ProjectedFeature | null {
     const pickCanvas = pickCanvasRef.current;
@@ -301,6 +358,47 @@ export function PrecinctCanvas({
     return idOf?.get(id) ?? null;
   }
 
+  const lastPickRef = useRef({ x: -99, y: -99 });
+  function handleMove(e: ReactMouseEvent<HTMLDivElement>) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    // pick() reads a pixel back from the picking canvas — skip it for sub-pixel jitter
+    if (Math.abs(x - lastPickRef.current.x) < 1.5 && Math.abs(y - lastPickRef.current.y) < 1.5) return;
+    lastPickRef.current = { x, y };
+    const f = pick(e.clientX, e.clientY);
+    onHover?.(f);
+    if (hoverRef.current !== f) {
+      hoverRef.current = f;
+      latestHighlightRef.current();
+    }
+    setHover((prev) => (f ? { f, x, y } : prev ? null : prev));
+  }
+  function handleLeave() {
+    hoverRef.current = null;
+    latestHighlightRef.current();
+    setHover(null);
+    onHover?.(null);
+  }
+  const zoomBy = (factor: number) => {
+    const overlay = containerRef.current;
+    const zb = zoomBehaviorRef.current;
+    if (overlay && zb) select(overlay).call(zb.scaleBy, factor);
+  };
+  const resetView = () => {
+    fittedKeyRef.current = '';
+    setFitTick((t) => t + 1); // re-run the fit effect
+  };
+
+  // keep the tooltip inside the frame: flip to the left / above near the right / bottom edge
+  const tipStyle = hover
+    ? {
+        left: hover.x > size.w - 250 ? Math.max(4, hover.x - 236) : hover.x + 14,
+        top: hover.y > size.h - 170 ? Math.max(4, hover.y - 150) : hover.y + 14,
+      }
+    : undefined;
+
   return (
     <div
       ref={containerRef}
@@ -309,15 +407,36 @@ export function PrecinctCanvas({
     >
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
       <canvas ref={pickCanvasRef} style={{ display: 'none' }} />
+      <canvas ref={hoverCanvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
       <div
         style={{ position: 'absolute', inset: 0, cursor: 'pointer' }}
-        onMouseMove={(e) => onHover?.(pick(e.clientX, e.clientY))}
-        onMouseLeave={() => onHover?.(null)}
+        onMouseMove={handleMove}
+        onMouseLeave={handleLeave}
         onClick={(e) => {
           const f = pick(e.clientX, e.clientY);
           if (f) onClick?.(f, e);
         }}
       />
+      {controls && (
+        <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4, zIndex: 5 }} onMouseMove={(e) => e.stopPropagation()}>
+          {([['+', () => zoomBy(1.6), 'Zoom in'], ['−', () => zoomBy(1 / 1.6), 'Zoom out'], ['⤢', resetView, 'Reset view']] as const).map(([label, fn, title]) => (
+            <button key={title} title={title} aria-label={title} onClick={fn}
+              style={{ width: 26, height: 26, borderRadius: 4, border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(10,14,23,0.85)', color: '#cbd5e1', fontSize: 14, lineHeight: 1, cursor: 'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {hover && tooltip && tipStyle && (
+        <div
+          role="tooltip"
+          data-testid="precinct-tooltip"
+          style={{ position: 'absolute', zIndex: 20, pointerEvents: "none", maxWidth: 270, ...tipStyle }}
+          className="bg-panel-raised/95 border border-hairline-bright rounded-md shadow-lg px-3 py-2 text-xs font-data"
+        >
+          {tooltip(hover.f)}
+        </div>
+      )}
     </div>
   );
 }

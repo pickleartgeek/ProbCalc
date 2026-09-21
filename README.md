@@ -78,6 +78,20 @@ data point (e.g. after pasting updated polling data). ProbCalc results get attac
 the most recent snapshot when you run them. There's no cross-device sync — it's your
 browser's local storage, so it survives refreshes but not a different browser/device.
 
+## Running locally
+
+```
+npm install
+npm run dev
+```
+
+## Building
+
+```
+npm run build
+```
+
+Outputs to `dist/`.
 
 ## Deploying to GitHub Pages (no Actions)
 

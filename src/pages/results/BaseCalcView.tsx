@@ -7,6 +7,8 @@ import { readableOn, onDark } from '../../lib/partyColors';
 import { BaseTimelineChart } from '../../components/BaseTimelineChart';
 import { PollWeightsTable } from '../../components/results/PollWeightsTable';
 import { ResultsDonut } from '../../components/ResultsDonut';
+import { RaceMap } from '../../components/results/RaceMap';
+import type { GeoScene } from '../../hooks/useGeoScene';
 
 const WINDOWS: { label: string; days: number | null }[] = [
   { label: 'Cumulative', days: null },
@@ -16,7 +18,7 @@ const WINDOWS: { label: string; days: number | null }[] = [
 ];
 
 /** BaseCalc view: raw polling aggregate, daily moving averages, poll weights. No simulation involved. */
-export function BaseCalcView({ config, pollData, baseCalc }: { config: ElectionConfig; pollData: ParsedPollData; baseCalc: BaseCalcBundle }) {
+export function BaseCalcView({ config, pollData, baseCalc, scene }: { config: ElectionConfig; pollData: ParsedPollData; baseCalc: BaseCalcBundle; scene: GeoScene }) {
   const [windowDays, setWindowDays] = useState<number | null>(null);
   const partyById = Object.fromEntries(config.parties.map((p) => [p.id, p]));
   const sorted = [...baseCalc.results].sort((a, b) => b.percentage - a.percentage);
@@ -27,6 +29,7 @@ export function BaseCalcView({ config, pollData, baseCalc }: { config: ElectionC
     return computeBaseCalcTimeline(config.parties, pollData.rows, config.electionDate, { ...optionsFromWeighting(config.sim.dateWeighting), windowDays, endDate: end });
   }, [windowDays, baseCalc.timeline, config, pollData.rows]);
 
+  const aggregate = useMemo(() => Object.fromEntries(baseCalc.results.map((r) => [r.partyId, r.percentage])), [baseCalc.results]);
   const dw = config.sim.dateWeighting;
   const chips = [
     `divisor ${dw.enabled === false ? 'off' : dw.divisor}`,
@@ -39,24 +42,9 @@ export function BaseCalcView({ config, pollData, baseCalc }: { config: ElectionC
     <div className="space-y-6">
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-panel border border-hairline rounded-lg p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="font-display font-700 text-lg">Day-by-day BaseCalc</h2>
-            <div className="flex gap-1 text-xs font-data" role="group" aria-label="Averaging window">
-              {WINDOWS.map((w) => (
-                <button key={w.label} onClick={() => setWindowDays(w.days)}
-                  className={`px-2.5 py-1 rounded border transition ${windowDays === w.days ? 'border-cyan text-cyan bg-cyan/10' : 'border-hairline text-ink-muted hover:text-ink'}`}>
-                  {w.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <BaseTimelineChart parties={config.parties} timeline={timeline} rawPolls={pollData.rows} electionDate={config.electionDate} />
-          <p className="text-ink-dim text-xs mt-2">
-            Each day uses only polls whose fieldwork had ended by then. Dots are individual polls; the line is the weighted aggregate.
-            {windowDays === null ? ' Cumulative: every poll released so far counts.' : ` Trailing ${windowDays}-day window.`}
-          </p>
+          <h2 className="font-display font-700 text-lg mb-3">Expected result by region</h2>
+          <RaceMap config={config} mode="base" aggregate={aggregate} scene={scene} drawKey={0} />
         </div>
-
         <div className="bg-panel border border-hairline rounded-lg p-5 flex flex-col items-center">
           <ResultsDonut
             parties={config.parties}
@@ -83,6 +71,25 @@ export function BaseCalcView({ config, pollData, baseCalc }: { config: ElectionC
           </p>
         </div>
       </div>
+
+      <div className="bg-panel border border-hairline rounded-lg p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="font-display font-700 text-lg">Day-by-day BaseCalc</h2>
+            <div className="flex gap-1 text-xs font-data" role="group" aria-label="Averaging window">
+              {WINDOWS.map((w) => (
+                <button key={w.label} onClick={() => setWindowDays(w.days)}
+                  className={`px-2.5 py-1 rounded border transition ${windowDays === w.days ? 'border-cyan text-cyan bg-cyan/10' : 'border-hairline text-ink-muted hover:text-ink'}`}>
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <BaseTimelineChart parties={config.parties} timeline={timeline} rawPolls={pollData.rows} electionDate={config.electionDate} />
+          <p className="text-ink-dim text-xs mt-2">
+            Each day uses only polls whose fieldwork had ended by then. Dots are individual polls; the line is the weighted aggregate.
+            {windowDays === null ? ' Cumulative: every poll released so far counts.' : ` Trailing ${windowDays}-day window.`}
+          </p>
+        </div>
 
       <div className="bg-panel border border-hairline rounded-lg p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">

@@ -54,6 +54,8 @@ export interface RegionBinding {
   participants: 'all' | string[];
   /** Optional user-pasted previous results (see parseBaselineCsv) that override the preset's bundled baseline. */
   baselineCsv?: string;
+  /** Manual party → baseline-column overrides made on the shift table (party id → baseline key, '__rest__' = Others, null = none). */
+  partyMap?: Record<string, string | null>;
 }
 
 export interface ElectionConfig {

@@ -63,8 +63,13 @@ export function governorRaceDefs(): RaceDef[] {
   }));
 }
 
-const midtermById = () => new Map([...senateRaceDefs(), ...governorRaceDefs()].map((d) => [d.id, d]));
-export const midtermRaceDef = (id: string): RaceDef | undefined => midtermById().get(id);
+// Built once. This used to rebuild all 71 defs on every call, so each render handed a card a brand-new object, which
+// re-triggered its loading effects and recomputed its BaseCalc every time anything above it re-rendered.
+let midtermIndex: Map<string, RaceDef> | null = null;
+export const midtermRaceDef = (id: string): RaceDef | undefined => {
+  if (!midtermIndex) midtermIndex = new Map([...senateRaceDefs(), ...governorRaceDefs()].map((d) => [d.id, d]));
+  return midtermIndex.get(id);
+};
 
 /** Marquee races shown in the Gallery. */
 export const GALLERY_RACES: RaceDef[] = [

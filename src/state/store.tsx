@@ -29,6 +29,8 @@ interface EngineContextValue extends EngineState {
   setPollData: (d: ParsedPollData) => void;
   /** Loads a race (config + polls) atomically and clears any previous simulation. */
   setRace: (c: ElectionConfig, d: ParsedPollData, view?: 'base' | 'prob') => void;
+  /** Patch only the geography binding — keeps polls and any finished simulation. */
+  setRegionBinding: (b: import('../lib/types').RegionBinding | undefined) => void;
   setProbCalcResults: (r: ProbCalcResult[], outcomes: SimulationOutcome[]) => void;
   setViewMode: (m: 'base' | 'prob') => void;
   setCandidatePortrait: (partyId: string, dataUrl: string) => void;
@@ -75,6 +77,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     setConfig: (c) => setState((s) => ({ ...s, config: c, probCalcResults: null, outcomes: null })),
     setPollData: (d) => setState((s) => ({ ...s, pollData: d, probCalcResults: null, outcomes: null })),
     setRace: (c, d, view = 'base') => setState((s) => ({ ...s, config: c, pollData: d, probCalcResults: null, outcomes: null, viewMode: view })),
+    setRegionBinding: (b) => setState((s) => (s.config ? { ...s, config: { ...s.config, regionBinding: b } } : s)),
     setProbCalcResults: (r, outcomes) => setState((s) => ({ ...s, probCalcResults: r, outcomes })),
     setViewMode: (m) => setState((s) => ({ ...s, viewMode: m })),
     setCandidatePortrait: (partyId, dataUrl) =>

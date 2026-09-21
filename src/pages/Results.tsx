@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useGeoScene } from '../hooks/useGeoScene';
 import { Link, Navigate } from 'react-router-dom';
 import { useEngine } from '../state/store';
 import { readableOn, onDark } from '../lib/partyColors';
@@ -11,6 +12,7 @@ export function Results() {
   const { config, pollData, baseCalc, probCalcResults, outcomes, viewMode } = useEngine();
   const [snapshotCount, setSnapshotCount] = useState(() => (config ? getHistory(config.id).length : 0));
   const [justLogged, setJustLogged] = useState(false);
+  const scene = useGeoScene(config);
 
   if (!config || !pollData || !baseCalc) return <Navigate to="/build" replace />;
 
@@ -50,9 +52,9 @@ export function Results() {
       )}
 
       {viewMode === 'base' ? (
-        <BaseCalcView config={config} pollData={pollData} baseCalc={baseCalc} />
+        <BaseCalcView config={config} pollData={pollData} baseCalc={baseCalc} scene={scene} />
       ) : (
-        <ProbCalcView config={config} baseCalc={baseCalc} onRan={() => setSnapshotCount(getHistory(config.id).length)} />
+        <ProbCalcView config={config} baseCalc={baseCalc} scene={scene} onRan={() => setSnapshotCount(getHistory(config.id).length)} />
       )}
 
       <div className="mt-6 bg-panel border border-hairline rounded-lg p-5 flex flex-wrap items-center justify-between gap-3">

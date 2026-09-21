@@ -66,7 +66,9 @@ export function Build() {
       setRaw(result.wikitext);
       setWikiFetchedFrom(`"${result.sectionTitle}" section of ${result.pageTitle}`);
     } catch (err) {
-      setWikiError(err instanceof Error ? err.message : 'Fetch failed');
+      const kind = (err as { kind?: string })?.kind;
+      const hint = kind === 'timeout' || kind === 'network' ? ' — Wikipedia could not be reached from this browser; you can still paste the table below.' : kind === 'missing-page' ? ' — check the exact page title.' : '';
+      setWikiError((err instanceof Error ? err.message : 'Fetch failed') + hint);
       setWikiFetchedFrom(null);
     } finally {
       setWikiFetching(false);
@@ -373,7 +375,8 @@ export function Build() {
             </div>
             {wikiFetchedFrom && (
               <p className="text-ink-dim text-[11px] font-data mb-2">
-                Loaded from {wikiFetchedFrom} — review below, then Parse table.
+                Loaded from {wikiFetchedFrom} —{' '}
+                {parsedRows.length > 0 ? `${parsedRows.length} polls across ${parties.length} parties parsed; BaseCalc is below.` : 'parsing…'}
               </p>
             )}
             {wikiError && <p className="text-red-call text-[11px] font-data mb-2">{wikiError}</p>}
