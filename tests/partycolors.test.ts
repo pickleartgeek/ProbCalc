@@ -5,7 +5,7 @@ import { parsePollData } from '../src/lib/parser';
 import { PARTY_COLORS } from '../src/data/partyColors';
 const conf = (country: string, key: string) => PARTY_COLORS.find((e) => e.country === country && e.key === key)!.confidence;
 import { applyPartyColors, detectCountry, registryColor, US_DEM, US_REP, countryFromRegion } from '../src/lib/partyRegistry';
-import { onDark } from '../src/lib/partyColors';
+import { onDark, backfillAffiliationFromCandidates } from '../src/lib/partyColors';
 import type { Party } from '../src/lib/types';
 
 const mk = (names: string[]): Party[] => names.map((n) => ({ id: n.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, ''), name: n, shortName: n, color: '#123456' }));
@@ -125,6 +125,36 @@ test('registry hygiene: keys unique per country, valid hex, and the unverified e
   }
   const unverified = PARTY_COLORS.filter((e) => e.confidence !== 'high').map((e) => `${e.country}/${e.key} [${e.confidence}] ${e.color}`);
   console.log(`\n  ${unverified.length} of ${PARTY_COLORS.length} registry colours are not marked high-confidence:\n  ` + unverified.join('\n  '));
+});
+
+test('backfillAffiliationFromCandidates colors a bare-surname column when the header gives no party word', () => {
+  // Simulates the Maine case: Wikipedia's table lists "Jackson" and "Collins" as bare surname
+  // columns with no "(D)"/"(R)" in the header, so buildPartyFromHeader falls back to an
+  // arbitrary index-based color for both — the actual bug being fixed here.
+  const wikitext = table(['Jackson', 'Collins'], ['48', '46']);
+  const parsed = parsePollData(wikitext);
+  const before = parsed.parties.find((p) => p.name === 'Jackson')!;
+  assert.equal(before.affiliation, undefined); // confirms the header-word detector really did miss it
+
+  const backfilled = backfillAffiliationFromCandidates(parsed.parties, { demCandidate: 'Troy Jackson', repCandidate: 'Susan Collins' });
+  const jackson = backfilled.find((p) => p.name === 'Jackson')!;
+  const collins = backfilled.find((p) => p.name === 'Collins')!;
+  assert.equal(jackson.affiliation, 'D');
+  assert.equal(jackson.color, US_DEM);
+  assert.equal(collins.affiliation, 'R');
+  assert.equal(collins.color, US_REP);
+});
+
+test('backfillAffiliationFromCandidates leaves already-detected affiliations and non-matching columns alone', () => {
+  const wikitext = table(['Jon Ossoff Democratic', 'Someone Else'], ['48', '10']);
+  const parsed = parsePollData(wikitext);
+  const backfilled = backfillAffiliationFromCandidates(parsed.parties, { demCandidate: 'Jon Ossoff', repCandidate: 'Mystery Candidate' });
+  // Ossoff was already correctly colored by header-word detection; backfill must not touch it
+  const ossoff = backfilled.find((p) => p.name.includes('Ossoff'))!;
+  assert.equal(ossoff.color, US_DEM);
+  // "Someone Else" doesn't match "Mystery Candidate"'s surname, so it's left as a generic fallback color, not R
+  const other = backfilled.find((p) => p.name === 'Someone Else')!;
+  assert.equal(other.affiliation, undefined);
 });
 
 test('bundled gallery seeds carry registry colours (DE / SK / US / UK)', () => {

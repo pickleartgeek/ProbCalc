@@ -85,6 +85,63 @@ export function findByAffiliation<T extends { id: string; affiliation?: Affiliat
   );
 }
 
+/**
+ * Surname match for backfillAffiliationFromCandidates: a header column built from a bare
+ * candidate name ("Schiff", "A. Schiff", "Adam B. Schiff") against a known full name
+ * ("Adam Schiff"). Compares last tokens (surnames) case-insensitively so short columns
+ * (common on Wikipedia poll tables with narrow layouts) still match.
+ */
+function surnameMatches(headerSlug: string, knownName: string): boolean {
+  const knownTokens = knownName
+    .split(/\s+/)
+    .map((t) => slugify(t))
+    .filter((t) => t.length > 0 && !NAME_SUFFIX.test(t));
+  if (knownTokens.length === 0) return false;
+  const surname = knownTokens[knownTokens.length - 1];
+  // require a real surname match, not just any short substring, to avoid false positives
+  return surname.length >= 3 && headerSlug.includes(surname);
+}
+
+/**
+ * Backfills party affiliation (and its color) for columns the header-word detector missed —
+ * i.e. a Wikipedia table column that names only a bare candidate surname, with no
+ * "Democratic"/"Republican" word in the header at all. That's exactly the case that produces
+ * inconsistent D/R coloring: `buildPartyFromHeader` correctly colors a column when the header
+ * spells out the party, but silently falls back to an arbitrary index-based palette otherwise,
+ * so which candidate gets red vs. blue ends up depending on the order columns happen to appear
+ * in that particular table. This matches parsed party names/ids against the real, named
+ * nominees already tracked in senateData.ts/governorData.ts (via RaceDef.demCandidate/
+ * repCandidate) and, on a match, assigns the correct affiliation + color — same colors
+ * `buildPartyFromHeader` would have produced had the header spelled the party out.
+ *
+ * Mutates nothing; returns a new array (parties without a match are returned unchanged).
+ */
+export function backfillAffiliationFromCandidates<
+  T extends { id: string; name: string; shortName: string; color: string; affiliation?: Affiliation }
+>(parties: T[], known: { demCandidate?: string | null; repCandidate?: string | null }): T[] {
+  const candidates: [Affiliation, string][] = [];
+  if (known.demCandidate) candidates.push(['D', known.demCandidate]);
+  if (known.repCandidate) candidates.push(['R', known.repCandidate]);
+  if (candidates.length === 0) return parties;
+
+  const seen: Partial<Record<Affiliation, number>> = {};
+  // count affiliations already assigned (e.g. by header-word detection) so a backfilled
+  // match still gets the right shade if one party in this race was already colored
+  for (const p of parties) if (p.affiliation) seen[p.affiliation] = (seen[p.affiliation] ?? 0) + 1;
+
+  return parties.map((p) => {
+    if (p.affiliation) return p; // header-word detection already handled this one
+    const slug = slugify(p.name) || slugify(p.shortName) || p.id;
+    const match = candidates.find(([, name]) => surnameMatches(slug, name));
+    if (!match) return p;
+    const [aff] = match;
+    const n = seen[aff] ?? 0;
+    seen[aff] = n + 1;
+    const color = n === 0 ? AFFILIATION_COLOR[aff] : adjustLightness(AFFILIATION_COLOR[aff], Math.min(0.3, n * 0.12));
+    return { ...p, affiliation: aff, color };
+  });
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace('#', '');
   const bigint = parseInt(clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean, 16);

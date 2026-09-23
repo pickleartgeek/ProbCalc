@@ -8,6 +8,14 @@ export interface StateInfo {
 }
 
 export interface SenateRace {
+  /**
+   * Set when a candidate swap/withdrawal happened mid-cycle — excludes any
+   * poll fielded before this date, so old rows still labeled with the
+   * withdrawn candidate's name (as Wikipedia's polling tables often keep
+   * them, in a separate column, rather than retroactively editing history)
+   * don't get counted as live Gallery/Split Ticket polling for this race.
+   */
+  pollCutoffDate?: string | null;
   id: string;
   stateAbbr: string;
   stateName: string;

@@ -6,13 +6,20 @@ import { onDark } from '../../lib/partyColors';
 export function DrawsChart({ parties, outcomes, base }: { parties: Party[]; outcomes: SimulationOutcome[]; base: Record<string, number> }) {
   const rows = useMemo(() => {
     const top = [...parties].sort((a, b) => (base[b.id] ?? 0) - (base[a.id] ?? 0)).slice(0, 4);
-    return top.map((p) => {
-      const vals = outcomes.map((o) => o.values[p.id] ?? 0);
-      const lo = Math.min(...vals), hi = Math.max(...vals);
-      const bins = 24;
-      const step = (hi - lo) / bins || 1;
+    const perParty = top.map((p) => outcomes.map((o) => o.values[p.id] ?? 0));
+    // Shared range across every party in this race, not each party's own min/max — otherwise
+    // each histogram gets independently stretched to fill its row, so a party with a wide,
+    // uncertain distribution and one with a narrow, near-certain one end up looking the same
+    // width, and bars for different parties are never actually comparable at a glance.
+    const allVals = perParty.flat();
+    const lo = allVals.length ? Math.min(...allVals) : 0;
+    const hi = allVals.length ? Math.max(...allVals) : 1;
+    const bins = 24;
+    const step = (hi - lo) / bins || 1;
+    return top.map((p, i) => {
+      const vals = perParty[i];
       const counts = new Array(bins).fill(0);
-      for (const v of vals) counts[Math.min(bins - 1, Math.floor((v - lo) / step))]++;
+      for (const v of vals) counts[Math.min(bins - 1, Math.max(0, Math.floor((v - lo) / step)))]++;
       const sorted = [...vals].sort((a, b) => a - b);
       const q = (f: number) => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))];
       return { p, lo, hi, counts, max: Math.max(...counts), p10: q(0.1), p90: q(0.9) };

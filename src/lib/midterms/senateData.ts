@@ -24,7 +24,12 @@ const RAW: Omit<SenateRace, 'id' | 'stateName'>[] = [
   { stateAbbr: 'KY', seatClass: 2, special: false, incumbentParty: 'R', incumbentName: null, open: true, rating: 'LikelyR' },
   { stateAbbr: 'LA', seatClass: 2, special: false, incumbentParty: 'R', incumbentName: null, open: true, rating: 'SafeR' },
   { stateAbbr: 'ME', seatClass: 2, special: false, incumbentParty: 'R', incumbentName: 'Susan Collins', open: false, rating: 'Tossup',
-    demCandidate: 'Troy Jackson', repCandidate: 'Susan Collins', pollMargin: -1.5, pollSource: 'CNN / Abacus / Fox News (avg, tight since Platner-to-Jackson swap)', pollAsOf: '2026-09-06' },
+    demCandidate: 'Troy Jackson', repCandidate: 'Susan Collins', pollMargin: -1.5, pollSource: 'CNN / Abacus / Fox News (avg, tight since Platner-to-Jackson swap)', pollAsOf: '2026-09-06',
+    // Graham Platner withdrew July 10, 2026; Troy Jackson entered July 25. Wikipedia's polling
+    // table keeps his pre-withdrawal numbers in their own column rather than deleting them, so
+    // without this cutoff the live Gallery/Split Ticket feed still counts Platner as "the
+    // Democrat" in this race.
+    pollCutoffDate: '2026-07-25' },
   { stateAbbr: 'MA', seatClass: 2, special: false, incumbentParty: 'D', incumbentName: 'Ed Markey', open: false, rating: 'SafeD' },
   { stateAbbr: 'MI', seatClass: 2, special: false, incumbentParty: 'D', incumbentName: null, open: true, rating: 'Tossup',
     demCandidate: 'Abdul El-Sayed', repCandidate: 'Mike Rogers', pollMargin: -1, pollSource: '270towin 5-poll average', pollAsOf: '2026-08-20' },

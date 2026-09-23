@@ -82,3 +82,20 @@ test('cutoffDate drops earlier polls from headline, weights and timeline alike',
   assert.equal(computeBaseCalcTimeline(parties, rows, ELECTION, opts)[0].date, '2024-09-10');
   assert.equal(computePollWeights(parties, rows, ELECTION, opts).find((x) => x.rowId === '1')?.included, false);
 });
+
+test('recencyWindowDays gives a rolling recency cutoff on the headline BaseCalc itself, not just the timeline', () => {
+  // "now" = Oct 31; a 30-day window keeps only polls 3 and 4 (Oct 5, Oct 30), same as the
+  // existing timeline windowDays test above, but exercised against computeBaseCalc directly —
+  // this is the number ProbCalc and the donut actually consume. Named distinctly from
+  // TimelineOptions.windowDays (relative to each iterated day, not to real "now").
+  const opts = { recencyWindowDays: 30, nowIso: '2024-10-31' };
+  const r = computeBaseCalc(parties, rows, ELECTION, opts);
+  assert.equal(r.includedPolls, 2);
+  const solo = computeBaseCalc(parties, rows.filter((row) => row.id === '3' || row.id === '4'), ELECTION).results;
+  for (const s of solo) assert.ok(Math.abs(r.results.find((x) => x.partyId === s.partyId)!.percentage - s.percentage) < 1e-9);
+});
+
+test('recencyWindowDays leaves other options (cutoffDate, divisor) unaffected when unset', () => {
+  const r = computeBaseCalc(parties, rows, ELECTION);
+  assert.equal(r.includedPolls, 4); // default fully-cumulative behavior is unchanged
+});

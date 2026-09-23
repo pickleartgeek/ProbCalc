@@ -1,6 +1,7 @@
 import type { ParsedPollData } from '../types';
 import { parsePollData } from '../parser';
 import { fetchWikipediaPolling, WikiFetchError, type WikiFailureKind, type WikiRequestOptions } from '../mediawikiApi';
+import { backfillAffiliationFromCandidates } from '../partyColors';
 import { GROUP_COUNTRY, type RaceDef } from './registry';
 
 // Client-side race loading with a safety net. Order of preference:
@@ -62,6 +63,17 @@ export function hasUsablePolls(p: ParsedPollData): boolean {
   return p.parties.length > 0 && p.rows.some((r) => !r.isElectionResult && r.fieldworkEnd && r.sampleSize && Object.keys(r.values).length > 0);
 }
 
+/**
+ * Backfills party affiliation/color for columns that only give a bare candidate surname
+ * (no "Democratic"/"Republican" word in the header) against the real nominees a RaceDef
+ * already knows, when it knows any — a no-op for races without demCandidate/repCandidate
+ * (i.e. every non-US-midterm race, unaffected).
+ */
+function withKnownCandidates(parsed: ParsedPollData, def: RaceDef): ParsedPollData {
+  if (!def.demCandidate && !def.repCandidate) return parsed;
+  return { ...parsed, parties: backfillAffiliationFromCandidates(parsed.parties, def) };
+}
+
 // ---- concurrency: never more than 3 live Wikipedia requests in flight from the whole app ----------
 let active = 0;
 const waiting: (() => void)[] = [];
@@ -99,7 +111,7 @@ async function loadRaceUncached(def: RaceDef, deps: { force?: boolean } & Loader
     const res = await withSlot(() =>
       fetchWikipediaPolling(def.wikiPage, def.wiki, def.sectionHint, { ...deps.wiki, fetchImpl: deps.fetchImpl, searchQuery: def.searchQuery })
     );
-    const parsed = parsePollData(res.wikitext, { country: GROUP_COUNTRY[def.group] });
+    const parsed = withKnownCandidates(parsePollData(res.wikitext, { country: GROUP_COUNTRY[def.group] }), def);
     if (!hasUsablePolls(parsed)) throw new WikiFetchError('no-table', `No usable polling table in "${res.sectionTitle}" of ${res.pageTitle}`);
     const load: RaceLoad = {
       raceId: def.id, source: 'live', parsed, fetchedAt: new Date(now()).toISOString(), pageTitle: res.pageTitle, sectionTitle: res.sectionTitle,
@@ -113,7 +125,7 @@ async function loadRaceUncached(def: RaceDef, deps: { force?: boolean } & Loader
 
   try {
     const file = (await fetchJson(`${BASE}data/races/${def.id}.json`.replace(/\/{2,}/g, '/'))) as FallbackFile;
-    const parsed: ParsedPollData = { warnings: [], format: 'wikitext', ...file.parsed };
+    const parsed: ParsedPollData = withKnownCandidates({ warnings: [], format: 'wikitext', ...file.parsed }, def);
     if (!hasUsablePolls(parsed)) throw new Error('fallback file holds no usable polls');
     return {
       raceId: def.id, source: file.synthetic ? 'seed' : 'fallback', parsed, fetchedAt: file.fetchedAt,

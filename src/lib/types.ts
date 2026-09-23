@@ -28,6 +28,15 @@ export interface DateWeighting {
   cutoffDate?: string | null; // exclude polls fielded before this date
   minSampleSize?: number; // exclude polls below this sample size
   dateBasis?: 'end' | 'midpoint'; // which fieldwork date anchors the recency calc
+  // Rolling recency window, in days, measured back from *today* (not the
+  // election date): exclude any poll fielded more than this many days ago.
+  // Unlike cutoffDate (a fixed absolute date), this stays "trailing" as time
+  // passes — for races with very long, high-volume polling histories and a
+  // distant/assumed election date (e.g. Slovakia), the 1/daysTillElection
+  // decay alone barely differentiates old polls from new ones, so the
+  // cumulative total gets dominated by sheer poll count instead of momentum.
+  // null/undefined = fully cumulative, the guide's default.
+  recencyWindowDays?: number | null;
 }
 
 export interface EnvironmentShiftConfig {

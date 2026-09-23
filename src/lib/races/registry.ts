@@ -26,10 +26,15 @@ export interface RaceDef {
   searchQuery?: string;
   /** ignore polls before this date (the guide's "cut off at a pivotal point") */
   cutoffDate?: string;
+  /** rolling recency window in days (see BaseCalcOptions.recencyWindowDays) — for races with a long, high-volume polling history and a distant/assumed election date, where cumulative decay alone can't surface momentum */
+  recencyWindowDays?: number;
   regionBinding?: RegionBinding;
   kind: 'gallery' | 'senate' | 'governor';
   /** the date is a placeholder (next election not yet scheduled) */
   dateAssumed?: boolean;
+  /** known real nominees, when named — lets the parser backfill party affiliation/color for columns that only give a bare candidate surname (see partyColors.ts's backfillAffiliationFromCandidates) */
+  demCandidate?: string | null;
+  repCandidate?: string | null;
 }
 
 const MIDTERM_DATE = '2026-11-03';
@@ -46,6 +51,9 @@ export function senateRaceDefs(): RaceDef[] {
     wikiPage: `2026 United States Senate ${r.special ? 'special ' : ''}election in ${r.stateName}`,
     kind: 'senate' as const,
     regionBinding: stateBinding(r.stateAbbr),
+    cutoffDate: r.pollCutoffDate ?? undefined,
+    demCandidate: r.demCandidate,
+    repCandidate: r.repCandidate,
   }));
 }
 
@@ -60,6 +68,8 @@ export function governorRaceDefs(): RaceDef[] {
     wikiPage: `2026 ${r.stateName} gubernatorial election`,
     kind: 'governor' as const,
     regionBinding: stateBinding(r.stateAbbr),
+    demCandidate: r.demCandidate,
+    repCandidate: r.repCandidate,
   }));
 }
 
@@ -73,10 +83,6 @@ export const midtermRaceDef = (id: string): RaceDef | undefined => {
 
 /** Marquee races shown in the Gallery. */
 export const GALLERY_RACES: RaceDef[] = [
-  {
-    id: 'us-pa-sen-2024', title: 'Pennsylvania Senate 2024', group: 'United States', region: 'Pennsylvania', electionDate: '2024-11-05', votingSystem: 'FPTP',
-    wikiPage: '2024 United States Senate election in Pennsylvania', cutoffDate: '2024-09-10', kind: 'gallery', regionBinding: stateBinding('PA'),
-  },
   ...['sen-ga', 'sen-me', 'sen-mi', 'sen-nc'].map((id) => ({ ...midtermRaceDef(id)!, kind: 'gallery' as const })),
   {
     id: 'de-2025', title: 'German federal election 2025', group: 'Germany', region: 'Germany', electionDate: '2025-02-23', votingSystem: 'PartyList',
@@ -102,6 +108,11 @@ export const GALLERY_RACES: RaceDef[] = [
     id: 'sk-next', title: 'Next Slovak parliamentary election', group: 'Slovakia', region: 'Slovakia', electionDate: '2027-09-30', votingSystem: 'PartyList', dateAssumed: true,
     wikiPage: 'Opinion polling for the next Slovak parliamentary election', searchQuery: 'Opinion polling for the next Slovak parliamentary election', kind: 'gallery',
     regionBinding: { presetId: 'sk-obce', participants: 'all' },
+    // Slovak pollsters publish very frequently and the election date is a distant placeholder,
+    // so 1/daysTillElection decay barely differentiates old polls from new ones and the sheer
+    // poll count buries any real momentum shift. A ~9-month trailing window keeps the headline
+    // number reflecting recent movement instead of the entire multi-year backlog.
+    recencyWindowDays: 270,
   },
 ];
 
@@ -123,7 +134,7 @@ export function configForRace(def: RaceDef, parsed: ParsedPollData): ElectionCon
     sim: {
       simulations: 1000,
       beta: 1,
-      dateWeighting: { enabled: true, divisor: 100, cutoffDate: def.cutoffDate ?? null, minSampleSize: 0, dateBasis: 'end' },
+      dateWeighting: { enabled: true, divisor: 100, cutoffDate: def.cutoffDate ?? null, minSampleSize: 0, dateBasis: 'end', recencyWindowDays: def.recencyWindowDays ?? null },
     },
   };
 }

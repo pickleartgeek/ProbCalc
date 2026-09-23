@@ -1,51 +1,507 @@
 [
-  {
-    "raceId": "sen-ga",
-    "chamber": "senate",
-    "stateAbbr": "GA",
-    "wikiPage": "2026 United States Senate election in Georgia",
-    "electionDate": "2026-11-03"
-  },
-  {
-    "raceId": "sen-me",
-    "chamber": "senate",
-    "stateAbbr": "ME",
-    "wikiPage": "2026 United States Senate election in Maine",
-    "electionDate": "2026-11-03"
-  },
-  {
-    "raceId": "sen-mi",
-    "chamber": "senate",
-    "stateAbbr": "MI",
-    "wikiPage": "2026 United States Senate election in Michigan",
-    "electionDate": "2026-11-03"
-  },
-  {
-    "raceId": "sen-nc",
-    "chamber": "senate",
-    "stateAbbr": "NC",
-    "wikiPage": "2026 United States Senate election in North Carolina",
-    "electionDate": "2026-11-03"
-  },
-  {
-    "raceId": "sen-ak",
-    "chamber": "senate",
-    "stateAbbr": "AK",
-    "wikiPage": "2026 United States Senate election in Alaska",
-    "electionDate": "2026-11-03"
-  },
-  {
-    "raceId": "sen-nh",
-    "chamber": "senate",
-    "stateAbbr": "NH",
-    "wikiPage": "2026 United States Senate election in New Hampshire",
-    "electionDate": "2026-11-03"
-  },
-  {
-    "raceId": "gov-mi",
-    "chamber": "governor",
-    "stateAbbr": "MI",
-    "wikiPage": "2026 Michigan gubernatorial election",
-    "electionDate": "2026-11-03"
-  }
+ {
+  "raceId": "sen-al",
+  "chamber": "senate",
+  "stateAbbr": "AL",
+  "wikiPage": "2026 United States Senate election in Alabama",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ak",
+  "chamber": "senate",
+  "stateAbbr": "AK",
+  "wikiPage": "2026 United States Senate election in Alaska",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ar",
+  "chamber": "senate",
+  "stateAbbr": "AR",
+  "wikiPage": "2026 United States Senate election in Arkansas",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-co",
+  "chamber": "senate",
+  "stateAbbr": "CO",
+  "wikiPage": "2026 United States Senate election in Colorado",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-de",
+  "chamber": "senate",
+  "stateAbbr": "DE",
+  "wikiPage": "2026 United States Senate election in Delaware",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ga",
+  "chamber": "senate",
+  "stateAbbr": "GA",
+  "wikiPage": "2026 United States Senate election in Georgia",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-id",
+  "chamber": "senate",
+  "stateAbbr": "ID",
+  "wikiPage": "2026 United States Senate election in Idaho",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-il",
+  "chamber": "senate",
+  "stateAbbr": "IL",
+  "wikiPage": "2026 United States Senate election in Illinois",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ia",
+  "chamber": "senate",
+  "stateAbbr": "IA",
+  "wikiPage": "2026 United States Senate election in Iowa",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ks",
+  "chamber": "senate",
+  "stateAbbr": "KS",
+  "wikiPage": "2026 United States Senate election in Kansas",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ky",
+  "chamber": "senate",
+  "stateAbbr": "KY",
+  "wikiPage": "2026 United States Senate election in Kentucky",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-la",
+  "chamber": "senate",
+  "stateAbbr": "LA",
+  "wikiPage": "2026 United States Senate election in Louisiana",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-me",
+  "chamber": "senate",
+  "stateAbbr": "ME",
+  "wikiPage": "2026 United States Senate election in Maine",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ma",
+  "chamber": "senate",
+  "stateAbbr": "MA",
+  "wikiPage": "2026 United States Senate election in Massachusetts",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-mi",
+  "chamber": "senate",
+  "stateAbbr": "MI",
+  "wikiPage": "2026 United States Senate election in Michigan",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-mn",
+  "chamber": "senate",
+  "stateAbbr": "MN",
+  "wikiPage": "2026 United States Senate election in Minnesota",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ms",
+  "chamber": "senate",
+  "stateAbbr": "MS",
+  "wikiPage": "2026 United States Senate election in Mississippi",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-mt",
+  "chamber": "senate",
+  "stateAbbr": "MT",
+  "wikiPage": "2026 United States Senate election in Montana",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ne",
+  "chamber": "senate",
+  "stateAbbr": "NE",
+  "wikiPage": "2026 United States Senate election in Nebraska",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-nh",
+  "chamber": "senate",
+  "stateAbbr": "NH",
+  "wikiPage": "2026 United States Senate election in New Hampshire",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-nj",
+  "chamber": "senate",
+  "stateAbbr": "NJ",
+  "wikiPage": "2026 United States Senate election in New Jersey",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-nm",
+  "chamber": "senate",
+  "stateAbbr": "NM",
+  "wikiPage": "2026 United States Senate election in New Mexico",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-nc",
+  "chamber": "senate",
+  "stateAbbr": "NC",
+  "wikiPage": "2026 United States Senate election in North Carolina",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ok",
+  "chamber": "senate",
+  "stateAbbr": "OK",
+  "wikiPage": "2026 United States Senate election in Oklahoma",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-or",
+  "chamber": "senate",
+  "stateAbbr": "OR",
+  "wikiPage": "2026 United States Senate election in Oregon",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-ri",
+  "chamber": "senate",
+  "stateAbbr": "RI",
+  "wikiPage": "2026 United States Senate election in Rhode Island",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-sc",
+  "chamber": "senate",
+  "stateAbbr": "SC",
+  "wikiPage": "2026 United States Senate election in South Carolina",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-sd",
+  "chamber": "senate",
+  "stateAbbr": "SD",
+  "wikiPage": "2026 United States Senate election in South Dakota",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-tn",
+  "chamber": "senate",
+  "stateAbbr": "TN",
+  "wikiPage": "2026 United States Senate election in Tennessee",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-tx",
+  "chamber": "senate",
+  "stateAbbr": "TX",
+  "wikiPage": "2026 United States Senate election in Texas",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-va",
+  "chamber": "senate",
+  "stateAbbr": "VA",
+  "wikiPage": "2026 United States Senate election in Virginia",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-wv",
+  "chamber": "senate",
+  "stateAbbr": "WV",
+  "wikiPage": "2026 United States Senate election in West Virginia",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-wy",
+  "chamber": "senate",
+  "stateAbbr": "WY",
+  "wikiPage": "2026 United States Senate election in Wyoming",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-fl-sp",
+  "chamber": "senate",
+  "stateAbbr": "FL",
+  "wikiPage": "2026 United States Senate special election in Florida",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "sen-oh-sp",
+  "chamber": "senate",
+  "stateAbbr": "OH",
+  "wikiPage": "2026 United States Senate special election in Ohio",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-al",
+  "chamber": "governor",
+  "stateAbbr": "AL",
+  "wikiPage": "2026 Alabama gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ak",
+  "chamber": "governor",
+  "stateAbbr": "AK",
+  "wikiPage": "2026 Alaska gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-az",
+  "chamber": "governor",
+  "stateAbbr": "AZ",
+  "wikiPage": "2026 Arizona gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ar",
+  "chamber": "governor",
+  "stateAbbr": "AR",
+  "wikiPage": "2026 Arkansas gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ca",
+  "chamber": "governor",
+  "stateAbbr": "CA",
+  "wikiPage": "2026 California gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-co",
+  "chamber": "governor",
+  "stateAbbr": "CO",
+  "wikiPage": "2026 Colorado gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ct",
+  "chamber": "governor",
+  "stateAbbr": "CT",
+  "wikiPage": "2026 Connecticut gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-fl",
+  "chamber": "governor",
+  "stateAbbr": "FL",
+  "wikiPage": "2026 Florida gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ga",
+  "chamber": "governor",
+  "stateAbbr": "GA",
+  "wikiPage": "2026 Georgia gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-hi",
+  "chamber": "governor",
+  "stateAbbr": "HI",
+  "wikiPage": "2026 Hawaii gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-id",
+  "chamber": "governor",
+  "stateAbbr": "ID",
+  "wikiPage": "2026 Idaho gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-il",
+  "chamber": "governor",
+  "stateAbbr": "IL",
+  "wikiPage": "2026 Illinois gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ia",
+  "chamber": "governor",
+  "stateAbbr": "IA",
+  "wikiPage": "2026 Iowa gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ks",
+  "chamber": "governor",
+  "stateAbbr": "KS",
+  "wikiPage": "2026 Kansas gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-me",
+  "chamber": "governor",
+  "stateAbbr": "ME",
+  "wikiPage": "2026 Maine gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-md",
+  "chamber": "governor",
+  "stateAbbr": "MD",
+  "wikiPage": "2026 Maryland gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ma",
+  "chamber": "governor",
+  "stateAbbr": "MA",
+  "wikiPage": "2026 Massachusetts gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-mi",
+  "chamber": "governor",
+  "stateAbbr": "MI",
+  "wikiPage": "2026 Michigan gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-mn",
+  "chamber": "governor",
+  "stateAbbr": "MN",
+  "wikiPage": "2026 Minnesota gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ne",
+  "chamber": "governor",
+  "stateAbbr": "NE",
+  "wikiPage": "2026 Nebraska gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-nv",
+  "chamber": "governor",
+  "stateAbbr": "NV",
+  "wikiPage": "2026 Nevada gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-nh",
+  "chamber": "governor",
+  "stateAbbr": "NH",
+  "wikiPage": "2026 New Hampshire gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-nm",
+  "chamber": "governor",
+  "stateAbbr": "NM",
+  "wikiPage": "2026 New Mexico gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ny",
+  "chamber": "governor",
+  "stateAbbr": "NY",
+  "wikiPage": "2026 New York gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-oh",
+  "chamber": "governor",
+  "stateAbbr": "OH",
+  "wikiPage": "2026 Ohio gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ok",
+  "chamber": "governor",
+  "stateAbbr": "OK",
+  "wikiPage": "2026 Oklahoma gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-or",
+  "chamber": "governor",
+  "stateAbbr": "OR",
+  "wikiPage": "2026 Oregon gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-pa",
+  "chamber": "governor",
+  "stateAbbr": "PA",
+  "wikiPage": "2026 Pennsylvania gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-ri",
+  "chamber": "governor",
+  "stateAbbr": "RI",
+  "wikiPage": "2026 Rhode Island gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-sc",
+  "chamber": "governor",
+  "stateAbbr": "SC",
+  "wikiPage": "2026 South Carolina gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-sd",
+  "chamber": "governor",
+  "stateAbbr": "SD",
+  "wikiPage": "2026 South Dakota gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-tn",
+  "chamber": "governor",
+  "stateAbbr": "TN",
+  "wikiPage": "2026 Tennessee gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-tx",
+  "chamber": "governor",
+  "stateAbbr": "TX",
+  "wikiPage": "2026 Texas gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-vt",
+  "chamber": "governor",
+  "stateAbbr": "VT",
+  "wikiPage": "2026 Vermont gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-wi",
+  "chamber": "governor",
+  "stateAbbr": "WI",
+  "wikiPage": "2026 Wisconsin gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gov-wy",
+  "chamber": "governor",
+  "stateAbbr": "WY",
+  "wikiPage": "2026 Wyoming gubernatorial election",
+  "electionDate": "2026-11-03"
+ },
+ {
+  "raceId": "gcb",
+  "chamber": "generic-ballot",
+  "stateAbbr": "US",
+  "wikiPage": "2026 United States elections",
+  "electionDate": "2026-11-03",
+  "sectionHint": "2025–2026"
+ }
 ]

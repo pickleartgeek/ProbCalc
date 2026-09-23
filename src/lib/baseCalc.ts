@@ -14,6 +14,16 @@ export interface BaseCalcOptions {
   minSampleSize?: number;
   /** Which date to measure "days till election" from: the fieldwork end date (default, favors freshness) or the midpoint of start/end. */
   dateBasis?: 'end' | 'midpoint';
+  /**
+   * Rolling recency window in days, measured back from `now` (see `nowIso`) — exclude polls
+   * older than this, regardless of cutoffDate. null/undefined = fully cumulative. Distinct from
+   * TimelineOptions.windowDays below, which is a trailing window relative to each day of the
+   * timeline being drawn, not relative to real "now" — this one applies to the single headline
+   * BaseCalc number (and hence ProbCalc, the donut, everything that isn't the day-by-day chart).
+   */
+  recencyWindowDays?: number | null;
+  /** Reference "today" for recencyWindowDays purposes. Defaults to the real current date; only ever overridden in tests. */
+  nowIso?: string;
 }
 
 /** Adapter so the UI's DateWeighting config and the engine's options can't drift apart. */
@@ -23,6 +33,7 @@ export function optionsFromWeighting(dw: DateWeighting | undefined): BaseCalcOpt
     cutoffDate: dw?.cutoffDate ?? null,
     minSampleSize: dw?.minSampleSize ?? 0,
     dateBasis: dw?.dateBasis ?? 'end',
+    recencyWindowDays: dw?.recencyWindowDays ?? null,
   };
 }
 
@@ -53,6 +64,8 @@ function preparePolls(parties: Party[], rows: PollRow[], electionDateIso: string
   const minSampleSize = opts.minSampleSize ?? 0;
   const cutoffDate = opts.cutoffDate || null;
   const dateBasis = opts.dateBasis ?? 'end';
+  const recencyWindowDays = opts.recencyWindowDays ?? null;
+  const nowIso = opts.nowIso ?? new Date().toISOString().slice(0, 10);
   const included: IncludedPoll[] = [];
   const excluded: ExcludedPoll[] = [];
 
@@ -62,6 +75,10 @@ function preparePolls(parties: Party[], rows: PollRow[], electionDateIso: string
     if (row.sampleSize === null || row.sampleSize <= 0) { excluded.push({ row, reason: 'no sample size' }); continue; }
     if (row.sampleSize < minSampleSize) { excluded.push({ row, reason: `sample below ${minSampleSize}` }); continue; }
     if (cutoffDate && row.fieldworkEnd < cutoffDate) { excluded.push({ row, reason: `before cutoff ${cutoffDate}` }); continue; }
+    if (recencyWindowDays != null && daysBetween(row.fieldworkEnd, nowIso) > recencyWindowDays) {
+      excluded.push({ row, reason: `outside trailing ${recencyWindowDays}-day window` });
+      continue;
+    }
 
     const anchor = dateBasis === 'midpoint' && row.fieldworkStart ? midpointIso(row.fieldworkStart, row.fieldworkEnd) : row.fieldworkEnd;
     // clamped to 1 so a poll released on election day itself doesn't divide by zero

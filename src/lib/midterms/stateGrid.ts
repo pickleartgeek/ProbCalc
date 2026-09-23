@@ -55,7 +55,7 @@ export const STATE_PVI_2024_FALLBACK: Record<string, number> = {
 // House popular vote margin), and a live-editable "right now" reading — see
 // SplitTicket.tsx for the source and the slider that lets you update it.
 export const PREVIOUS_GCB_R_MARGIN = 3; // R+3, 2024 national House popular vote (approx.)
-export const DEFAULT_CURRENT_GCB_R_MARGIN = -6; // D+6, per Aug 2026 polling averages (DDHQ/Silver Bulletin/ActiVote), editable in-app
+export const DEFAULT_CURRENT_GCB_R_MARGIN = -6.8; // D+6.8, generic-ballot aggregator average (DDHQ/FiftyPlusOne/RCP/Silver Bulletin/VoteHub) as of Sept 11 2026, editable in-app
 
 // 2020-census House apportionment (static fact, holds through the 2030 census).
 export const HOUSE_APPORTIONMENT: Record<string, number> = {
