@@ -3,6 +3,8 @@
 // Wikipedia live (see src/lib/races/loader.ts). Run by the deploy workflow on every push and on the daily cron:
 //
 //   npx tsx scripts/refresh-races.mts              fetch every pre-built race from Wikipedia and write real files
+//   npx tsx scripts/refresh-races.mts --retry      re-fetch ONLY the races the previous run queued after a transient error
+//                                                  (429 / 5xx / timeout) — see scripts/lib/retry-queue.ts
 //   npx tsx scripts/refresh-races.mts --seed-only  offline: write ILLUSTRATIVE seeds (marked synthetic) for gallery
 //                                                  races that have no file yet; never overwrites a real file
 //
@@ -19,9 +21,11 @@ import { parsePollData } from '../src/lib/parser';
 import { hasUsablePolls, type FallbackFile } from '../src/lib/races/loader';
 import { allRaceDefs, GALLERY_RACES, GROUP_COUNTRY } from '../src/lib/races/registry';
 import { seedFor } from './lib/seed-polls';
+import { isRetryRun, isTransient, readQueue, writeQueue } from './lib/retry-queue';
 
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'data', 'races');
 const seedOnly = process.argv.includes('--seed-only');
+const retryRun = isRetryRun() && !seedOnly;
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const readExisting = (id: string): FallbackFile | null => {
   try { return JSON.parse(fs.readFileSync(path.join(OUT, `${id}.json`), 'utf8')); } catch { return null; }
@@ -29,7 +33,13 @@ const readExisting = (id: string): FallbackFile | null => {
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
-  const defs = seedOnly ? GALLERY_RACES : allRaceDefs();
+  let defs = seedOnly ? GALLERY_RACES : allRaceDefs();
+  if (retryRun) {
+    const queued = new Set(readQueue('races'));
+    defs = defs.filter((d) => queued.has(d.id));
+    log(`retry run: ${defs.length} queued race(s)${defs.length ? ` — ${defs.map((d) => d.id).join(', ')}` : ''}`);
+  }
+  const retryLater: string[] = [];
   let live = 0, seeded = 0, kept = 0, failed = 0;
   for (const def of defs) {
     const existing = readExisting(def.id);
@@ -50,7 +60,9 @@ async function main() {
         continue;
       } catch (e) {
         failed++;
-        log(`${def.id}: live fetch failed (${e instanceof Error ? e.message : e}) — ${existing ? 'keeping existing file' : 'no file yet'}`);
+        const transient = isTransient(e);
+        if (transient) retryLater.push(def.id);
+        log(`${def.id}: live fetch failed (${e instanceof Error ? e.message : e}) — ${existing ? 'keeping existing file' : 'no file yet'}${transient ? ', will retry later' : ''}`);
       }
     }
     if (existing) { kept++; continue; }
@@ -61,6 +73,7 @@ async function main() {
       log(`${def.id}: wrote illustrative seed (${seed.parsed.rows.length} synthetic polls)`);
     }
   }
-  log(`done — live ${live}, seeded ${seeded}, kept ${kept}, failed fetches ${failed}`);
+  if (!seedOnly) writeQueue('races', retryLater);
+  log(`done — live ${live}, seeded ${seeded}, kept ${kept}, failed fetches ${failed}${retryLater.length ? ` (${retryLater.length} queued for retry: ${retryLater.join(', ')})` : ''}`);
 }
 main().catch((e) => { console.error(e); process.exit(0); });
