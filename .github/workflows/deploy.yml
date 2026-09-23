@@ -4,6 +4,18 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    # Set automatically by the "retry" job below — not meant to be filled in by hand. A run with retry_of_run
+    # reuses the poll data fetched by that earlier run and re-fetches only the polls that hit a transient
+    # error (429 / 5xx / timeout) there.
+    inputs:
+      retry_of_run:
+        description: 'Internal: id of the run whose fetched poll data to reuse (leave empty for a normal deploy)'
+        required: false
+        default: ''
+      retry_attempt:
+        description: 'Internal: 1 = the normal run, 2+ = automatic retries'
+        required: false
+        default: '1'
   # Keeps polling data fresh without anyone touching the Build page — the
   # "Fetch fresh polls" step below re-runs scripts/fetch-polls.mts against
   # Wikipedia for every race in scripts/tracked-races.json and rebuilds.
@@ -15,16 +27,21 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read # lets a retry run download the poll data an earlier run saved
 
-# Only one deploy at a time; let an in-progress run finish rather than
-# cancelling it, so Pages never ends up serving a half-deployed build.
-concurrency:
-  group: pages
-  cancel-in-progress: false
+env:
+  RETRY_DELAY_MINUTES: 60 # how long to wait before re-fetching polls that were rate-limited / errored
+  MAX_ATTEMPTS: 3         # first run + up to 2 automatic retries
+
+# Pages deploys are serialised by a job-level group on `deploy` (below), NOT here: the retry job sleeps for an
+# hour, and a workflow-level group would make every push wait for that sleep to finish.
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      retry_scheduled: ${{ steps.queue.outputs.schedule }}
+      next_attempt: ${{ steps.queue.outputs.next_attempt }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,12 +83,64 @@ jobs:
           ls -la public/data/geo
 
       - name: Fetch fresh polls (Wikipedia, per scripts/tracked-races.json)
+        if: ${{ inputs.retry_of_run == '' }}
         run: npx tsx scripts/fetch-polls.mts
 
       - name: Refresh bundled race fallbacks (Wikipedia -> public/data/races)
         # Every Gallery and Split Ticket race falls back to these files when a visitor's browser cannot reach
         # Wikipedia live. Never fails the deploy: on an API error the previous file is kept.
+        if: ${{ inputs.retry_of_run == '' }}
         run: npx tsx scripts/refresh-races.mts
+
+      # ---- retry runs only: reuse the first run's data, re-fetch just the polls it queued ----
+      - name: Restore poll data from the earlier run
+        if: ${{ inputs.retry_of_run != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: fetched-data
+          run-id: ${{ inputs.retry_of_run }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+
+      - name: Re-fetch only the polls that failed last time
+        if: ${{ inputs.retry_of_run != '' }}
+        run: |
+          tar xzf fetched-data.tgz
+          npx tsx scripts/fetch-polls.mts --retry
+          npx tsx scripts/refresh-races.mts --retry
+
+      - name: Check whether anything still needs a retry
+        id: queue
+        run: |
+          count=0
+          for f in .cache/retry/*.json; do
+            [ -f "$f" ] || continue
+            n=$(jq '.ids | length' "$f")
+            count=$((count + n))
+            if [ "$n" -gt 0 ]; then
+              echo "::warning::$(basename "$f" .json): $n poll fetch(es) hit a transient error: $(jq -r '.ids | join(", ")' "$f")"
+            fi
+          done
+          attempt="${{ inputs.retry_attempt || 1 }}"
+          if [ "$count" -gt 0 ] && [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+            echo "schedule=true" >> "$GITHUB_OUTPUT"
+            echo "next_attempt=$((attempt + 1))" >> "$GITHUB_OUTPUT"
+            echo "Retry $((attempt + 1))/$MAX_ATTEMPTS will run in $RETRY_DELAY_MINUTES min for the $count poll(s) above."
+          else
+            echo "schedule=false" >> "$GITHUB_OUTPUT"
+            if [ "$count" -gt 0 ]; then echo "::warning::$count poll fetch(es) still failing after $attempt attempt(s) — giving up until the next scheduled run."; fi
+          fi
+
+      - name: Save fetched data for the retry
+        if: ${{ steps.queue.outputs.schedule == 'true' }}
+        run: tar czf fetched-data.tgz public/data/polls public/data/races .cache/retry
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ steps.queue.outputs.schedule == 'true' }}
+        with:
+          name: fetched-data
+          path: fetched-data.tgz
+          retention-days: 1
 
       - name: Build
         run: npm run build
@@ -83,9 +152,45 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Only one deploy at a time; let an in-progress run finish rather than
+    # cancelling it, so Pages never ends up serving a half-deployed build.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Waits, then starts a second run that re-fetches ONLY the polls the first run couldn't get (429s etc.) and
+  # redeploys. Runs alongside `deploy` (the site goes out right away with whatever was fetched).
+  #
+  # It runs on EVERY workflow run, even when there is nothing to retry: joining the group with
+  # cancel-in-progress is what cancels an older run's still-sleeping retry, so a newer run's fresher data is never
+  # overwritten by a stale retry. (You'll see those cancelled retry jobs in the Actions tab — that's expected.)
+  retry:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # to dispatch this workflow again
+    concurrency:
+      group: poll-retry
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Wait before retrying
+        if: ${{ needs.build.outputs.retry_scheduled == 'true' }}
+        run: |
+          echo "Waiting $RETRY_DELAY_MINUTES min, then re-fetching only the failed polls (attempt ${{ needs.build.outputs.next_attempt }}/$MAX_ATTEMPTS)"
+          sleep $((RETRY_DELAY_MINUTES * 60))
+      - name: Start the retry run
+        if: ${{ needs.build.outputs.retry_scheduled == 'true' }}
+        run: |
+          gh workflow run deploy.yml --ref "${{ github.ref_name }}" \
+            -f retry_of_run="${{ github.run_id }}" \
+            -f retry_attempt="${{ needs.build.outputs.next_attempt }}"
