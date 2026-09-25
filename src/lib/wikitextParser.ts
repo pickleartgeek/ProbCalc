@@ -1,6 +1,6 @@
 import type { ParsedPollData, Party, PollRow } from './types';
 import { parseOpdrtsParams, parseWikiDateRange } from './dateUtils';
-import { buildPartyFromHeader, slugify, type Affiliation } from './partyColors';
+import { buildPartyFromHeader, isGenericHeader, matchesCandidate, slugify, type Affiliation } from './partyColors';
 import { applyPartyColors, type PartyCountry } from './partyRegistry';
 import { classifyHeader, hasRequiredColumns, type ColumnRole } from './pollHeaderTerms';
 
@@ -116,7 +116,12 @@ interface TableParse {
   label: string;
 }
 
-function parseOneTable(tableText: string): TableParse {
+interface TableContext {
+  known?: KnownNominees;
+  cutoffDate?: string | null;
+}
+
+function parseOneTable(tableText: string, ctx: TableContext = {}): TableParse {
   const warnings: string[] = [];
   const empty = (msg: string): TableParse => ({ parties: [], rows: [], warnings: [msg], score: -1000, label: '' });
 
@@ -207,7 +212,9 @@ function parseOneTable(tableText: string): TableParse {
     });
   }
 
-  const usable = rows.filter((r) => !r.isElectionResult && r.fieldworkEnd && r.sampleSize && Object.keys(r.values).length > 0).length;
+  const cut = ctx.cutoffDate || '';
+  const isPoll = (r: PollRow) => !r.isElectionResult && r.fieldworkEnd && r.sampleSize && Object.keys(r.values).length > 0;
+  const usable = rows.filter((r) => isPoll(r) && (!cut || r.fieldworkEnd >= cut)).length; // polls that will actually count
   if (rows.filter((r) => !r.isElectionResult && r.fieldworkEnd).length === 0) warnings.push('No poll rows had a parseable fieldwork date.');
 
   // Which table is "the" polling table? Real polls with sample sizes, a D-vs-R pairing (US) and a
@@ -215,14 +222,46 @@ function parseOneTable(tableText: string): TableParse {
   const hasD = parties.some((p) => p.affiliation === 'D');
   const hasR = parties.some((p) => p.affiliation === 'R');
   let score = usable + (colRoles.includes('sample') ? 5 : 0) + (hasD && hasR ? 20 : 0) - (parties.length > 6 ? 15 : 0);
+  if (usable === 0) score -= 50; // aggregator tables, empty tables, tables whose every poll predates the cutoff
+
+  // A state page holds many tables: the head-to-head between the actual nominees, hypothetical matchups with people who
+  // dropped out, "vs. generic Democrat" tables. Only the first is the race. So when the caller knows the nominees, a table
+  // that names both of them beats any table that doesn't, however many polls the other one has — and a table built on
+  // "Generic Democrat / Generic Republican" columns is a last resort.
+  const named = partyDefs.map((d, k) => ({ d, party: parties[k] })).filter((x) => !x.d.isOthers);
+  // A side (D or R) whose every named column is generic makes this a "vs. generic Democrat" table. Such a table is only
+  // ever a last resort, however many polls it has: it must lose to ANY table of real candidates.
+  const genericOnlySide = (['D', 'R'] as const).some((aff) => {
+    const side = named.filter((x) => x.party.affiliation === aff);
+    return side.length > 0 && side.every((x) => isGenericHeader(x.d.header));
+  });
+  if (genericOnlySide) score -= 1000;
+  else if (named.some((x) => isGenericHeader(x.d.header))) score -= 60; // a stray generic column beside real candidates: cheap to drop later
+  const dem = ctx.known?.demCandidate, rep = ctx.known?.repCandidate;
+  const wanted = (dem ? 1 : 0) + (rep ? 1 : 0);
+  if (wanted > 0) {
+    const hits = (dem && named.some((x) => matchesCandidate(x.party, dem)) ? 1 : 0) + (rep && named.some((x) => matchesCandidate(x.party, rep)) ? 1 : 0);
+    score += hits === wanted ? 100 : hits * 40;
+  }
+
   if (!hasRequiredColumns(colRoles)) score = -500 + usable;
   const label = hasD || hasR ? parties.filter((p) => p.affiliation).map((p) => p.shortName).join(' vs ') : parties.slice(0, 4).map((p) => p.shortName).join(' · ');
   return { parties, rows, warnings, score, label };
 }
 
+/** The real nominees, when the caller knows them (RaceDef.demCandidate / repCandidate). */
+export interface KnownNominees {
+  demCandidate?: string | null;
+  repCandidate?: string | null;
+}
+
 export interface ParseOptions {
   /** Where the race is, when the caller knows. Otherwise it is detected from the parties themselves. */
   country?: PartyCountry;
+  /** Steers which table on a multi-table page is treated as the race's polling (see parseOneTable). */
+  known?: KnownNominees;
+  /** Polls fielded before this ISO date won't count downstream, so they don't count towards choosing a table either. */
+  cutoffDate?: string | null;
 }
 
 export function parseWikitext(raw: string, opts: ParseOptions = {}): ParsedPollData {
@@ -236,7 +275,14 @@ export function parseWikitext(raw: string, opts: ParseOptions = {}): ParsedPollD
 
   let tables = splitWikiTables(text);
   if (tables.length === 0) tables = [text]; // headless paste: rows only, no {| wrapper
-  const parsed = tables.map(parseOneTable);
+  const parsed = tables.map((t) => parseOneTable(t, { known: opts.known, cutoffDate: opts.cutoffDate }));
+  // US state pages keep one table per matchup, and pollsters keep testing candidates who have since dropped out. Without
+  // knowing the nominees, the best tell is which table is still being updated: prefer the one holding the newest polls.
+  if (opts.country === 'US' && parsed.length > 1) {
+    const newest = (t: TableParse) => t.rows.filter((r) => !r.isElectionResult && r.fieldworkEnd && r.sampleSize).reduce((m, r) => (r.fieldworkEnd > m ? r.fieldworkEnd : m), '');
+    const latest = parsed.map(newest).reduce((m, d) => (d > m ? d : m), '');
+    if (latest) parsed.forEach((t) => { const n = newest(t); if (n) t.score -= Math.min((Date.parse(latest) - Date.parse(n)) / 86_400_000, 90) * 0.5; });
+  }
   let best = 0;
   parsed.forEach((t, i) => {
     if (t.score > parsed[best].score) best = i;

@@ -52,7 +52,7 @@ export function derivePartyLabel(header: string): { name: string; shortName: str
   let stripped = header;
   for (const [re] of AFFILIATION_WORDS) stripped = stripped.replace(new RegExp(re.source, 'ig'), ' ');
   stripped = stripped.replace(/[()/,–-]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (stripped.length < 3) return fallback; // header was just "Democratic"
+  if (stripped.length < 3) return { ...fallback, shortName: { D: 'Dem', R: 'Rep', I: 'Ind' }[affiliation] }; // header was just "Democratic"
   const tokens = stripped.split(' ').filter((t) => !NAME_SUFFIX.test(t));
   const surname = tokens[tokens.length - 1] ?? stripped;
   return { name: `${stripped} (${affiliation})`, shortName: surname, affiliation };
@@ -101,6 +101,21 @@ function surnameMatches(headerSlug: string, knownName: string): boolean {
   // require a real surname match, not just any short substring, to avoid false positives
   return surname.length >= 3 && headerSlug.includes(surname);
 }
+
+/** True when a party (built from a table header) is the named candidate `knownName` — surname match, see surnameMatches. */
+export function matchesCandidate(p: { id: string; name: string; shortName: string }, knownName: string | null | undefined): boolean {
+  if (!knownName) return false;
+  const slug = slugify(p.name) || slugify(p.shortName) || p.id;
+  return surnameMatches(slug, knownName);
+}
+
+/**
+ * Column headers that stand for "some Democrat / some Republican" rather than a person: "Generic Democrat",
+ * "Unnamed Republican", "Another Democrat", "Democratic candidate". Wikipedia's state pages carry whole tables of these
+ * ("Susan Collins vs. generic Democrat"), and they must never be mistaken for the race's real head-to-head polling.
+ */
+const GENERIC_HEADER = /\b(generic|unnamed|unspecified|hypothetical)\b|\b(another|any|unknown)\s+(democrat(ic)?|republican|dem|gop)\b|^\s*(a\s+|the\s+)?(democrat(ic)?|republican)\s+(candidate|nominee)\s*$/i;
+export const isGenericHeader = (header: string): boolean => GENERIC_HEADER.test(header);
 
 /**
  * Backfills party affiliation (and its color) for columns the header-word detector missed —

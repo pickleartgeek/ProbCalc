@@ -1,7 +1,6 @@
 import type { ParsedPollData } from './types';
-import type { PartyCountry } from './partyRegistry';
 import { parsePlainTable } from './plainTableParser';
-import { parseWikitext } from './wikitextParser';
+import { parseWikitext, type ParseOptions } from './wikitextParser';
 
 export function detectFormat(raw: string): 'plain' | 'wikitext' | 'unknown' {
   const trimmed = raw.trim();
@@ -11,7 +10,7 @@ export function detectFormat(raw: string): 'plain' | 'wikitext' | 'unknown' {
   return 'unknown';
 }
 
-export function parsePollData(raw: string, opts: { country?: PartyCountry } = {}): ParsedPollData {
+export function parsePollData(raw: string, opts: ParseOptions = {}): ParsedPollData {
   const format = detectFormat(raw);
   if (format === 'wikitext') return parseWikitext(raw, opts);
   if (format === 'plain') return parsePlainTable(raw, opts);

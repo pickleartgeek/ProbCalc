@@ -152,9 +152,10 @@ export function rankPollingSections(sections: WikiSection[], sectionHint?: strin
     .map((s, order) => {
       const chain = [s, ...ancestors(s)];
       let score = 0;
-      if (hint && s.line.toLowerCase().includes(hint)) score += 50;
+      const hinted = !!hint && s.line.toLowerCase().includes(hint);
+      if (hinted) score += 50; // e.g. the generic ballot's tables sit under year headings ("2025–2026"), which say nothing about polling
       if (POLLING_SECTION_RE.test(s.line)) score += 10;
-      else score -= 100; // not a polling heading at all
+      else if (!hinted) score -= 100; // not a polling heading at all
       if (chain.some((c) => /general election/i.test(c.line))) score += 8;
       if (chain.some((c) => NOT_GENERAL_RE.test(c.line))) score -= 12;
       score -= Number(s.level) * 0.1; // ties: prefer the shallower (parent) section

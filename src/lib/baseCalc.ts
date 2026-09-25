@@ -12,6 +12,12 @@ export interface BaseCalcOptions {
   cutoffDate?: string | null;
   /** Exclude polls below this sample size entirely. */
   minSampleSize?: number;
+  /**
+   * Cap each poll's *effective* sample size (a 29,719-person Morning Consult tracker counts as `maxSampleSize`, not 30×
+   * a normal poll). Without it a handful of huge, frequent trackers swamp everything else in a national average —
+   * the generic ballot is the case that needs it. null/undefined = no cap (the guide's default).
+   */
+  maxSampleSize?: number | null;
   /** Which date to measure "days till election" from: the fieldwork end date (default, favors freshness) or the midpoint of start/end. */
   dateBasis?: 'end' | 'midpoint';
   /**
@@ -32,6 +38,7 @@ export function optionsFromWeighting(dw: DateWeighting | undefined): BaseCalcOpt
     divisor: dw?.enabled === false ? 1e12 : dw?.divisor ?? 100,
     cutoffDate: dw?.cutoffDate ?? null,
     minSampleSize: dw?.minSampleSize ?? 0,
+    maxSampleSize: dw?.maxSampleSize ?? null,
     dateBasis: dw?.dateBasis ?? 'end',
     recencyWindowDays: dw?.recencyWindowDays ?? null,
   };
@@ -62,6 +69,7 @@ function midpointIso(startIso: string, endIso: string): string {
 function preparePolls(parties: Party[], rows: PollRow[], electionDateIso: string, opts: BaseCalcOptions) {
   const divisor = opts.divisor ?? 100;
   const minSampleSize = opts.minSampleSize ?? 0;
+  const maxSampleSize = opts.maxSampleSize && opts.maxSampleSize > 0 ? opts.maxSampleSize : null;
   const cutoffDate = opts.cutoffDate || null;
   const dateBasis = opts.dateBasis ?? 'end';
   const recencyWindowDays = opts.recencyWindowDays ?? null;
@@ -83,7 +91,7 @@ function preparePolls(parties: Party[], rows: PollRow[], electionDateIso: string
     const anchor = dateBasis === 'midpoint' && row.fieldworkStart ? midpointIso(row.fieldworkStart, row.fieldworkEnd) : row.fieldworkEnd;
     // clamped to 1 so a poll released on election day itself doesn't divide by zero
     const daysTillElection = Math.max(1, daysBetween(anchor, electionDateIso));
-    const factor = row.sampleSize / (daysTillElection * divisor);
+    const factor = (maxSampleSize ? Math.min(row.sampleSize, maxSampleSize) : row.sampleSize) / (daysTillElection * divisor);
     const contribution: Record<string, number> = {};
     let any = false;
     for (const p of parties) {

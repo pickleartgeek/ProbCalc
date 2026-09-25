@@ -27,6 +27,7 @@ export interface DateWeighting {
   divisor: number; // default 100, per the guide
   cutoffDate?: string | null; // exclude polls fielded before this date
   minSampleSize?: number; // exclude polls below this sample size
+  maxSampleSize?: number | null; // cap each poll's effective sample size (stops huge trackers swamping a national average)
   dateBasis?: 'end' | 'midpoint'; // which fieldwork date anchors the recency calc
   // Rolling recency window, in days, measured back from *today* (not the
   // election date): exclude any poll fielded more than this many days ago.
