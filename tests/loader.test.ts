@@ -128,8 +128,9 @@ test('registry: every 2026 Senate and governor race gets a page title and a stat
   assert.equal(g.length, 36);
   assert.ok(s.every((d) => /^2026 United States Senate (special )?election in [A-Z]/.test(d.wikiPage)));
   assert.ok(g.every((d) => /^2026 [A-Z][A-Za-z ]+ gubernatorial election$/.test(d.wikiPage)));
-  // every race maps onto a geography, except the ones explicitly waiting for their boundary data
-  const AWAITING_GEOGRAPHY = ['uk-next'];
+  // every race maps onto a geography, except the ones explicitly waiting for their boundary data, and the national
+  // generic ballot (one nationwide number — there is nothing to bind to a state map)
+  const AWAITING_GEOGRAPHY = ['gcb-2026', 'uk-next'];
   assert.deepEqual(allRaceDefs().filter((d) => !d.regionBinding).map((d) => d.id), AWAITING_GEOGRAPHY);
   assert.equal(new Set(allRaceDefs().map((d) => d.id)).size, allRaceDefs().length, 'ids are unique');
 });
