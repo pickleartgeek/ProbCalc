@@ -10,7 +10,7 @@ export function RaceCard({ def }: { def: RaceDef }) {
   const nav = useNavigate();
   const { setRace } = useEngine();
   const data = useRacePolling(def);
-  const ready = !!data.load && hasUsablePolls(data.load.parsed);
+  const ready = !!data.load && hasUsablePolls(data.load.parsed, def.cutoffDate);
 
   const open = (view: 'base' | 'prob', to: string) => {
     if (!data.load || !ready) return;
