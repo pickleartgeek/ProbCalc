@@ -18,8 +18,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchWikipediaPolling } from '../src/lib/mediawikiApi';
 import { parsePollData } from '../src/lib/parser';
-import { hasUsablePolls, type FallbackFile } from '../src/lib/races/loader';
-import { allRaceDefs, GALLERY_RACES, GROUP_COUNTRY } from '../src/lib/races/registry';
+import { assertRealCandidates, hasUsablePolls, shapeForRace, type FallbackFile } from '../src/lib/races/loader';
+import { allRaceDefs, GALLERY_RACES, parseOptionsFor } from '../src/lib/races/registry';
 import { seedFor } from './lib/seed-polls';
 import { isRetryRun, isTransient, readQueue, writeQueue } from './lib/retry-queue';
 
@@ -46,8 +46,9 @@ async function main() {
     if (!seedOnly) {
       try {
         const res = await fetchWikipediaPolling(def.wikiPage, def.wiki, def.sectionHint, { searchQuery: def.searchQuery, timeoutMs: 20_000 });
-        const parsed = parsePollData(res.wikitext, { country: GROUP_COUNTRY[def.group] });
-        if (!hasUsablePolls(parsed)) throw new Error(`no usable polling table in "${res.sectionTitle}"`);
+        const parsed = shapeForRace(parsePollData(res.wikitext, parseOptionsFor(def)), def);
+        if (!hasUsablePolls(parsed, def.cutoffDate)) throw new Error(`no usable polling table in "${res.sectionTitle}"`);
+        assertRealCandidates(parsed, def); // never publish a Generic / "Democrat (D)" table for a Senate or governor race
         const file: FallbackFile = {
           raceId: def.id, fetchedAt: new Date().toISOString(), pageTitle: res.pageTitle, sectionTitle: res.sectionTitle,
           note: res.resolvedFrom ? `Resolved "${res.resolvedFrom}" to "${res.pageTitle}"` : undefined,

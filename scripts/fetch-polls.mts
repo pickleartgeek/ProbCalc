@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 import { fetchWikipediaPolling } from '../src/lib/mediawikiApi';
 import { parsePollData } from '../src/lib/parser';
 import { computeBaseCalc } from '../src/lib/baseCalc';
+import { assertRealCandidates, shapeForRace } from '../src/lib/races/loader';
+import { raceDefById, parseOptionsFor } from '../src/lib/races/registry';
 import { isRetryRun, isTransient, readQueue, writeQueue } from './lib/retry-queue';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,7 +72,11 @@ async function main() {
     log(`${race.raceId}: fetching "${race.wikiPage}"…`);
     try {
       const { wikitext, sectionTitle } = await fetchWikipediaPolling(race.wikiPage, race.wiki, race.sectionHint);
-      const parsed = parsePollData(wikitext);
+      // Same table-selection rules as the app: a Senate/governor race knows its nominees and poll cutoff, so the
+      // head-to-head between them wins over hypothetical and "vs. generic Democrat" tables.
+      const def = raceDefById(race.raceId);
+      const parsed = def ? shapeForRace(parsePollData(wikitext, parseOptionsFor(def)), def) : parsePollData(wikitext, { country: 'US' });
+      if (def) assertRealCandidates(parsed, def); // a generic-only table must never feed a Senate/governor margin
 
       if (parsed.format === 'unknown' || parsed.parties.length === 0 || parsed.rows.length === 0) {
         log(`  ! could not extract a poll table from "${sectionTitle}" — skipping (leaving any previous data in place)`);
@@ -81,7 +87,8 @@ async function main() {
       const { results, includedPolls, excludedPolls } = computeBaseCalc(
         parsed.parties,
         parsed.rows,
-        race.electionDate
+        race.electionDate,
+        { cutoffDate: def?.cutoffDate ?? null, maxSampleSize: def?.maxSampleSize ?? null, recencyWindowDays: def?.recencyWindowDays ?? null }
       );
 
       const asOf = new Date().toISOString();
