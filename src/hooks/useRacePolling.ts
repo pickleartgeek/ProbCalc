@@ -36,7 +36,7 @@ export function useRacePolling(def: RaceDef) {
   useEffect(() => { if (visible) run(false); }, [visible, run]);
 
   const bundle: BaseCalcBundle | null = useMemo(() => {
-    if (!load || !hasUsablePolls(load.parsed)) return null;
+    if (!load || !hasUsablePolls(load.parsed, def.cutoffDate)) return null;
     return computeBaseCalcBundle(configForRace(def, load.parsed), load.parsed);
   }, [load, def]);
 
