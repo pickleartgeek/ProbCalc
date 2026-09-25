@@ -1,0 +1,497 @@
+== Generic ballot ==
+{| class="wikitable"
+|-
+! Source of poll<br />aggregation
+! Dates<br />administered
+! Dates<br />updated
+! Republicans
+! Democrats
+! Other/<br />Undecided
+! Margin
+|-
+| Decision Desk HQ
+| January 9, 2025 – September 11, 2026
+| September 13, 2026
+| 41.9%
+| 48.6%
+| 9.5%
+| Democrats +6.7%
+|-
+| Silver Bulletin
+| January 9, 2025 – September 11, 2026
+| September 13, 2026
+| 41.4%
+| 48.6%
+| 10.0%
+| Democrats +7.2%
+|-
+| Average
+|
+| September 13, 2026
+| 41.9%
+| 48.8%
+| 9.3%
+| Democrats +6.9%
+|}
+
+=== 2025–2026 ===
+{| class="wikitable sortable mw-datatable" style="text-align:center;font-size:90%"
+|- valign=bottom
+! Poll source
+! Date(s)<br />administered
+! Sample<br />size
+! Margin<br />of error
+! style="width:100px;" | Democratic
+! style="width:100px;" | Republican
+! Other/<br />Undecided
+! Lead
+|-
+| rowspan=2 | [[Harvard-Harris poll|Harvard/Harris Poll]]/[[HarrisX]]
+| rowspan=2 | August 28–30, 2026
+| 2,100 (RV)
+| rowspan=2 | ± 2.1%
+| 51%
+| 49%
+| –
+| 2%
+|-
+| – (LV)
+| 49%
+| 51%
+| –
+| 2%
+|-
+| Emerson College
+| August 16–17, 2026
+| 1,000 (LV)
+| ± 3.0%
+| 51%
+| 43%
+| 6%
+| 8%
+|-
+| rowspan=2 | [[Reuters]]/[[Ipsos]]
+| rowspan=2 | August 14–17, 2026
+| 876 (RV)
+| ± 3.4%
+| 41%
+| 36%
+| 23%
+| 5%
+|-
+| 1,166 (A)
+| ± 2.9%
+| 35%
+| 30%
+| 35%
+|
+|-
+| The Bullfinch Group
+| August 14–17, 2026
+| 1,000 (RV)
+| ± 3.1%
+| 42%
+| 37%
+| 21%
+| 5%
+|-
+| Echelon Insights
+| August 13–17, 2026
+| 1,002 (LV)
+| ± 3.4%
+| 50%
+| 45%
+| 5%
+| 5%
+|-
+| Morning Consult
+| August 10–16, 2026
+| 29,719 (RV)
+| ± 0.6%
+| 46%
+| 42%
+| 12%
+| 4%
+|-
+| Focaldata/Financial Times
+| August 7–11, 2026
+| 1,857 (LV)
+| –
+| 51%
+| 45%
+| 4%
+| 6%
+|-
+| AlphaROC
+| August 8–10, 2026
+| 1,000 (A)
+| ± 3.1%
+| 41%
+| 37%
+| 22%
+| 4%
+|-
+| The Economist/YouGov
+| August 7–10, 2026
+| 1,419 (RV)
+| ± 3.2%
+| 46%
+| 40%
+| 14%
+| 6%
+|-
+| Morning Consult
+| August 3–9, 2026
+| 29,719 (RV)
+| ± 0.6%
+| 47%
+| 42%
+| 11%
+| 5%
+|-
+| Cygnal (R)
+| August 6–7, 2026
+| 1,500 (LV)
+| ± 2.5%
+| 49%
+| 42%
+| 9%
+| 7%
+|-
+| John Zogby Strategies
+| August 4–5, 2026
+| 921 (LV)
+| ± 3.2%
+| 51%
+| 40%
+| 9%
+| 11%
+|-
+| Quantus Insights (R)
+| August 3–4, 2026
+| 1,048 (LV)
+| ± 3.2%
+| 49%
+| 43%
+| 8%
+| 6%
+|-
+| The Economist/YouGov
+| July 31 – August 3, 2026
+| 1,472 (RV)
+| ± 3.3%
+| 46%
+| 42%
+| 12%
+| 4%
+|-
+| Reuters/Ipsos
+| July 29 – August 3, 2026
+| 3,542 (RV)
+| ± 1.7%
+| 42%
+| 37%
+| 21%
+| 5%
+|-
+| Morning Consult
+| July 27 – August 2, 2026
+| 24,000 (RV)
+| ± 1.0%
+| 46%
+| 42%
+| 12%
+| 4%
+|-
+| Big Data Poll (R)
+| July 27–29, 2026
+| 2,617 (LV)
+| ± 1.7%
+| 50%
+| 39%
+| 10%
+| 11%
+|-
+| Marquette University Law School
+| July 22–29, 2026
+| 572 (LV)
+| ± 4.4%
+| 51%
+| 45%
+| 4%
+| 6%
+|-
+| CNN/SSRS
+| July 23–27, 2026
+| 914 (RV)
+| ± 3.2%
+| 47%
+| 39%
+| 14%
+| 8%
+|-
+| Quinnipiac University
+| July 23–27, 2026
+| 963 (RV)
+| ± 4.1%
+| 48%
+| 41%
+| 11%
+| 7%
+|-
+| Reuters/Ipsos
+| July 24–26, 2026
+| 1,003 (RV)
+| ± 3.2%
+| 40%
+| 38%
+| 22%
+| 2%
+|-
+| Morning Consult
+| July 20–26, 2026
+| 24,000 (RV)
+| ± 1.0%
+| 46%
+| 43%
+| 11%
+| 3%
+|-
+| The Argument/Verasight
+| July 20–26, 2026
+| 3,000 (RV)
+| ± 2.0%
+| 54%
+| 46%
+| –
+| 8%
+|-
+| CBS News/YouGov
+| July 22–24, 2026
+| 1,474 (RV)
+| –
+| 47%
+| 40%
+| 13%
+| 7%
+|-
+| Clarity Campaign Labs (D)
+| July 17–22, 2026
+| 1,000 (LV)
+| ± 3.0%
+| 52%
+| 42%
+| 6%
+| 10%
+|-
+| McLaughlin & Associates (R)
+| July 15–21, 2026
+| 1,000 (LV)
+| –
+| 46%
+| 44%
+| 10%
+| 2%
+|-
+| Emerson College
+| July 19–20, 2026
+| 1,100 (LV)
+| ± 2.9%
+| 53%
+| 42%
+| 5%
+| 11%
+|-
+| Beacon Research (D)/ Shaw & Co. Research (R)
+| July 17–20, 2026
+| 1,003 (RV)
+| ± 3.0%
+| 53%
+| 46%
+| 1%
+| 7%
+|-
+| The Economist/YouGov
+| July 17–20, 2026
+| 1,432 (RV)
+| ± 3.2%
+| 46%
+| 41%
+| 13%
+| 5%
+|-
+| Morning Consult
+| July 17–19, 2026
+| 2,200 (RV)
+| –
+| 46%
+| 43%
+| 11%
+| 3%
+|-
+| Focaldata
+| July 14–20, 2026
+| 2,064 (A)
+| —
+| 44%
+| 36%
+| 20%
+| 8%
+|-
+| Strength In Numbers/Verasight
+| July 14–17, 2026
+| 1,364 (RV)
+| –
+| 50%
+| 43%
+| 7%
+| 7%
+|-
+| AlphaROC
+| July 13–14, 2026
+| 1,000 (A)
+| ± 3.1%
+| 42%
+| 37%
+| 21%
+| 6%
+|-
+| RMG Research
+| July 6–14, 2026
+| 2,000 (RV)
+| ± 2.2%
+| 47%
+| 45%
+| 8%
+| 2%
+|-
+| Morning Consult
+| July 10–13, 2026
+| 2,200 (RV)
+| –
+| 46%
+| 43%
+| 11%
+| 3%
+|-
+| The Economist/YouGov
+| July 10–13, 2026
+| 1,447 (RV)
+| ± 3.2%
+| 46%
+| 42%
+| 12%
+| 4%
+|-
+| Echelon Insights
+| July 9–13, 2026
+| 1,004 (LV)
+| ± 3.6%
+| 50%
+| 44%
+| 6%
+| 6%
+|-
+| The Washington Post/Ipsos
+| July 8–13, 2026
+| 1,483 (LV)
+| ± 2.6%
+| 53%
+| 45%
+| 2%
+| 8%
+|-
+| Harvard/Harris Poll/HarrisX
+| July 11–12, 2026
+| 1,776 (RV)
+| ± 2.3%
+| 50%
+| 50%
+| –
+| Tie
+|-
+| Hart Research Associates (D)/ Public Opinion Strategies (R)
+| July 8–12, 2026
+| 1,000 (RV)
+| ± 3.1%
+| 49%
+| 45%
+| 6%
+| 4%
+|-
+| Pew Research Center
+| July 6–12, 2026
+| 2,779 (RV)
+| ± 2.2%
+| 43%
+| 37%
+| 20%
+| 6%
+|-
+| HarrisX/2WAY
+| July 9–10, 2026
+| 787 (LV)
+| –
+| 47%
+| 44%
+| 9%
+| 3%
+|-
+| Quantus Insights (R)
+| July 3–7, 2026
+| 1,140 (LV)
+| ± 2.9%
+| 47%
+| 42%
+| 11%
+| 5%
+|-
+| Morning Consult
+| June 29 – July 5, 2026
+| 24,000 (RV)
+| ± 1.0%
+| 46%
+| 42%
+| 12%
+| 4%
+|-
+| Manhattan Institute
+| July 1–6, 2026
+| 1,121 (LV)
+| ± 3.1%
+| 47%
+| 43%
+| 10%
+| 4%
+|-
+| Zogby Analytics
+| July 1–4, 2026
+| 1,003 (LV)
+| ± 3.1%
+| 42%
+| 36%
+| 22%
+| 6%
+|}
+
+=== 2024–2025 ===
+{| class="wikitable sortable mw-datatable" style="text-align:center;font-size:90%"
+|- valign=bottom
+! Poll source
+! Date(s)<br />administered
+! Sample<br />size
+! Margin<br />of error
+! style="width:100px;" | Democratic
+! style="width:100px;" | Republican
+! Other/<br />Undecided
+! Lead
+|-
+| McLaughlin & Associates (R)
+| December 11–16, 2024
+| 1,000 (LV)
+| –
+| 42%
+| 47%
+| 11%
+| 5%
+|}
