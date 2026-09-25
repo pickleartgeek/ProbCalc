@@ -19,6 +19,8 @@ function specFor(def: RaceDef): Spec | null {
   switch (def.id) {
     case 'us-pa-sen-2024':
       return { from: '2024-06-15', to: '2024-11-02', n: 22, parties: [{ name: 'Bob Casey (D)', share: 47.5, affiliation: 'D' }, { name: 'Dave McCormick (R)', share: 46, affiliation: 'R' }, { name: 'Others', share: 6.5 }] };
+    case 'gcb-2026': // anchored on the Sept 2026 aggregator average on Wikipedia (D 48.8 / R 41.9 / other 9.3), NOT invented polling
+      return { from: '2026-06-01', to: '2026-09-15', n: 30, parties: [{ name: 'Democratic', share: 48.8, affiliation: 'D' }, { name: 'Republican', share: 41.9, affiliation: 'R' }, { name: 'Others', share: 9.3 }] };
     case 'de-2025':
       return { from: '2024-11-15', to: '2025-02-21', n: 40, parties: [{ name: 'Union', share: 28.5 }, { name: 'AfD', share: 20.8 }, { name: 'SPD', share: 16.4 }, { name: 'Grüne', share: 11.6 }, { name: 'Linke', share: 8.8 }, { name: 'BSW', share: 5.0 }, { name: 'FDP', share: 4.3 }, { name: 'Others', share: 4.6 }] };
     case 'de-next':
@@ -31,13 +33,15 @@ function specFor(def: RaceDef): Spec | null {
       return { from: '2024-01-01', to: '2026-09-10', n: 45, parties: [{ name: 'Smer–SD', share: 21 }, { name: 'PS', share: 20 }, { name: 'Hlas–SD', share: 12 }, { name: 'KDH', share: 8 }, { name: 'Republika', share: 7 }, { name: 'SaS', share: 6 }, { name: 'OĽaNO', share: 5 }, { name: 'Demokrati', share: 4 }, { name: 'SNS', share: 4 }, { name: 'Others', share: 13 }] };
     default: {
       const r = SENATE_RACES.find((s) => s.id === def.id);
-      if (!r) return null;
+      // No named nominees → nothing real to be illustrative about: a "Democrat (D) vs Republican (R)" placeholder is exactly
+      // the generic polling the cards must never show, so such races simply have no seed.
+      if (!r || !r.demCandidate || !r.repCandidate) return null;
       const m = r.pollMargin ?? 0; // R-positive margin in points
       return {
         from: '2026-02-01', to: '2026-09-15', n: 16,
         parties: [
-          { name: `${r.demCandidate ?? 'Democrat'} (D)`, share: 46 - m / 2, affiliation: 'D' },
-          { name: `${r.repCandidate ?? 'Republican'} (R)`, share: 46 + m / 2, affiliation: 'R' },
+          { name: `${r.demCandidate} (D)`, share: 46 - m / 2, affiliation: 'D' },
+          { name: `${r.repCandidate} (R)`, share: 46 + m / 2, affiliation: 'R' },
           { name: 'Others', share: 8 },
         ],
       };
