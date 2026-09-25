@@ -2,6 +2,7 @@ import type { ElectionConfig, ParsedPollData, RegionBinding, VotingSystem } from
 import { SENATE_RACES } from '../midterms/senateData';
 import { GOVERNOR_RACES } from '../midterms/governorData';
 import type { PartyCountry } from '../partyRegistry';
+import type { ParseOptions } from '../wikitextParser';
 
 // Every pre-built race: which Wikipedia page holds its polling, when it is/was held, and which geography it
 // maps onto for Election Night. Gallery races are hand-listed below; every 2026 Senate and governor race is
@@ -28,6 +29,8 @@ export interface RaceDef {
   cutoffDate?: string;
   /** rolling recency window in days (see BaseCalcOptions.recencyWindowDays) — for races with a long, high-volume polling history and a distant/assumed election date, where cumulative decay alone can't surface momentum */
   recencyWindowDays?: number;
+  /** cap each poll's effective sample size (see BaseCalcOptions.maxSampleSize) — for national averages where a few huge trackers would otherwise swamp everything */
+  maxSampleSize?: number;
   regionBinding?: RegionBinding;
   kind: 'gallery' | 'senate' | 'governor';
   /** the date is a placeholder (next election not yet scheduled) */
@@ -36,6 +39,17 @@ export interface RaceDef {
   demCandidate?: string | null;
   repCandidate?: string | null;
 }
+
+/**
+ * Everything the parser should know about a race up front: its country, and — for US races — the real nominees and the
+ * poll cutoff, so that on a page with a dozen polling tables (nominee head-to-head, withdrawn candidates, "vs. generic
+ * Democrat") it picks the table that is actually this race.
+ */
+export const parseOptionsFor = (def: RaceDef): ParseOptions => ({
+  country: GROUP_COUNTRY[def.group],
+  known: { demCandidate: def.demCandidate, repCandidate: def.repCandidate },
+  cutoffDate: def.cutoffDate,
+});
 
 const MIDTERM_DATE = '2026-11-03';
 const stateBinding = (abbr: string): RegionBinding => ({ presetId: 'us-states', participants: [abbr] });
@@ -83,6 +97,17 @@ export const midtermRaceDef = (id: string): RaceDef | undefined => {
 
 /** Marquee races shown in the Gallery. */
 export const GALLERY_RACES: RaceDef[] = [
+  {
+    // The national generic congressional ballot — the environment number Split Ticket's whole model hangs off. It is
+    // fetched, cached, seeded and modelled exactly like every other race here, so it gets a card and a BaseCalc trajectory.
+    // The polls live in year-headed tables ("2025–2026") on the elections page, not on a page of their own.
+    // Two settings a state race doesn't need: a national average has huge, frequent trackers (Morning Consult runs 24,000–
+    // 30,000 respondents a week) that would otherwise outweigh ~30 normal polls each, so effective sample is capped; and its
+    // history runs back to 2025, so a trailing 90-day window keeps the headline about *now* rather than the whole cycle.
+    id: 'gcb-2026', title: 'Generic congressional ballot 2026', group: 'United States', region: 'United States', electionDate: MIDTERM_DATE, votingSystem: 'FPTP',
+    wikiPage: '2026 United States elections', sectionHint: '2025–2026', searchQuery: '2026 United States elections generic ballot polling', kind: 'gallery',
+    maxSampleSize: 3000, recencyWindowDays: 90,
+  },
   ...['sen-ga', 'sen-me', 'sen-mi', 'sen-nc'].map((id) => ({ ...midtermRaceDef(id)!, kind: 'gallery' as const })),
   {
     id: 'de-2025', title: 'German federal election 2025', group: 'Germany', region: 'Germany', electionDate: '2025-02-23', votingSystem: 'PartyList',
@@ -116,6 +141,19 @@ export const GALLERY_RACES: RaceDef[] = [
   },
 ];
 
+/**
+ * Races whose polling must name real candidates. Every 2026 Senate/governor race qualifies; the national generic ballot
+ * is the one US race that is *about* "the Democrat" and "the Republican", and international races have no D/R at all.
+ */
+export const requiresNamedCandidates = (def: RaceDef): boolean => def.group === 'United States' && def.id !== 'gcb-2026';
+
+/** Any pre-built race by id — gallery, Senate or governor — for callers (fetch-polls) that only have the id. */
+let raceIndex: Map<string, RaceDef> | null = null;
+export const raceDefById = (id: string): RaceDef | undefined => {
+  if (!raceIndex) raceIndex = new Map(allRaceDefs().map((d) => [d.id, d]));
+  return raceIndex.get(id);
+};
+
 export const allRaceDefs = (): RaceDef[] => {
   const seen = new Set<string>();
   return [...GALLERY_RACES, ...senateRaceDefs(), ...governorRaceDefs()].filter((d) => (seen.has(d.id) ? false : (seen.add(d.id), true)));
@@ -134,7 +172,7 @@ export function configForRace(def: RaceDef, parsed: ParsedPollData): ElectionCon
     sim: {
       simulations: 1000,
       beta: 1,
-      dateWeighting: { enabled: true, divisor: 100, cutoffDate: def.cutoffDate ?? null, minSampleSize: 0, dateBasis: 'end', recencyWindowDays: def.recencyWindowDays ?? null },
+      dateWeighting: { enabled: true, divisor: 100, cutoffDate: def.cutoffDate ?? null, minSampleSize: 0, maxSampleSize: def.maxSampleSize ?? null, dateBasis: 'end', recencyWindowDays: def.recencyWindowDays ?? null },
     },
   };
 }

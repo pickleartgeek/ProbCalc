@@ -2,7 +2,7 @@ import type { ParsedPollData } from '../types';
 import { parsePollData } from '../parser';
 import { fetchWikipediaPolling, WikiFetchError, type WikiFailureKind, type WikiRequestOptions } from '../mediawikiApi';
 import { backfillAffiliationFromCandidates } from '../partyColors';
-import { GROUP_COUNTRY, type RaceDef } from './registry';
+import { parseOptionsFor, requiresNamedCandidates, type RaceDef } from './registry';
 
 // Client-side race loading with a safety net. Order of preference:
 //   1. a fresh copy in this browser (localStorage, 6 h)        -> source 'browser-cache'
@@ -46,7 +46,8 @@ export interface LoaderDeps {
 }
 
 const TTL_MS = 6 * 3600_000;
-const KEY = (id: string) => `probcalc.race.v2.${id}`;
+// v4: table selection is now nominee-aware and refuses generic/placeholder columns; entries cached by v2/v3 may hold the wrong table
+const KEY = (id: string) => `probcalc.race.v4.${id}`;
 const BASE: string = ((import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL) ?? '/';
 
 function defaultStorage(): LoaderDeps['storage'] {
@@ -58,20 +59,59 @@ const defaultFetchJson = async (url: string) => {
   return r.json();
 };
 
-/** True when a parse yielded something BaseCalc can use: dated rows with sample sizes and values. */
-export function hasUsablePolls(p: ParsedPollData): boolean {
-  return p.parties.length > 0 && p.rows.some((r) => !r.isElectionResult && r.fieldworkEnd && r.sampleSize && Object.keys(r.values).length > 0);
+/** True when a parse yielded something BaseCalc can use: dated rows with sample sizes and values (on or after `cutoffDate`, if given). */
+export function hasUsablePolls(p: ParsedPollData, cutoffDate?: string | null): boolean {
+  return p.parties.length > 0 && p.rows.some((r) => !r.isElectionResult && r.fieldworkEnd && r.sampleSize && Object.keys(r.values).length > 0 && (!cutoffDate || r.fieldworkEnd >= cutoffDate));
 }
 
 /**
- * Backfills party affiliation/color for columns that only give a bare candidate surname
- * (no "Democratic"/"Republican" word in the header) against the real nominees a RaceDef
- * already knows, when it knows any — a no-op for races without demCandidate/repCandidate
- * (i.e. every non-US-midterm race, unaffected).
+ * Drops columns that carry no poll that will actually count: a withdrawn candidate whose every poll predates the cutoff,
+ * a primary opponent who never appears in the general-election table. Left in, they show up in a card's legend at 0.0.
+ * Never prunes below two columns.
  */
-function withKnownCandidates(parsed: ParsedPollData, def: RaceDef): ParsedPollData {
-  if (!def.demCandidate && !def.repCandidate) return parsed;
-  return { ...parsed, parties: backfillAffiliationFromCandidates(parsed.parties, def) };
+export function pruneEmptyParties(parsed: ParsedPollData, cutoffDate?: string | null): ParsedPollData {
+  const counted = parsed.rows.filter((r) => !r.isElectionResult && r.fieldworkEnd && (!cutoffDate || r.fieldworkEnd >= cutoffDate));
+  const keep = parsed.parties.filter((p) => counted.some((r) => r.values[p.id] !== undefined));
+  return keep.length >= 2 && keep.length < parsed.parties.length ? { ...parsed, parties: keep } : parsed;
+}
+
+/**
+ * Race-specific finishing for a parse: backfills party affiliation/color for columns that only give a bare candidate
+ * surname (no \"Democratic\"/\"Republican\" word in the header) against the real nominees a RaceDef already knows, then
+ * prunes columns with no counted polls. A no-op for races without candidates or cutoffs (every non-US-midterm race).
+ */
+/** "Generic (D)", "Another (R)", or just "Democrat (D)" / "Republican" — a side of the ballot, not a person. */
+const PLACEHOLDER_NAME = /^(generic|another|any|unnamed|unspecified|hypothetical|unknown|democrat(ic)?|republican|dem|rep|gop)(\s*\([DRI]\))?$/i;
+export const isPlaceholderParty = (p: { name: string; shortName: string }): boolean => PLACEHOLDER_NAME.test(p.name.trim()) || PLACEHOLDER_NAME.test(p.shortName.trim());
+
+/**
+ * Race-specific finishing for a parse: backfills party affiliation/color for columns that only give a bare candidate
+ * surname (no "Democratic"/"Republican" word in the header) against the real nominees a RaceDef already knows, drops
+ * placeholder columns ("Generic Democrat") that sit beside real candidates, then prunes columns with no counted polls.
+ */
+export function shapeForRace(parsed: ParsedPollData, def: RaceDef): ParsedPollData {
+  let out = def.demCandidate || def.repCandidate ? { ...parsed, parties: backfillAffiliationFromCandidates(parsed.parties, def) } : parsed;
+  if (requiresNamedCandidates(def)) {
+    const real = out.parties.filter((p) => !isPlaceholderParty(p));
+    // only when real candidates remain on BOTH sides — otherwise dropping would leave a one-sided table
+    if (real.length < out.parties.length && (['D', 'R'] as const).every((a) => real.some((p) => p.affiliation === a))) out = { ...out, parties: real };
+  }
+  return pruneEmptyParties(out, def.cutoffDate);
+}
+
+/**
+ * The guarantee behind "no race shows Generic R / Generic D": for a Senate or governor race, refuse a parse whose D or R
+ * side is nothing but placeholders. Throws a no-table WikiFetchError, so the live path falls back to the bundled file, the
+ * refresh scripts keep whatever they had, and nothing is ever published under a "Generic" or "Democrat (D)" label.
+ */
+export function assertRealCandidates(parsed: ParsedPollData, def: RaceDef): void {
+  if (!requiresNamedCandidates(def)) return;
+  for (const aff of ['D', 'R'] as const) {
+    const side = parsed.parties.filter((p) => p.affiliation === aff);
+    if (side.length > 0 && side.every(isPlaceholderParty)) {
+      throw new WikiFetchError('no-table', `Only a placeholder ${aff === 'D' ? 'Democrat' : 'Republican'} column (${side.map((p) => p.name).join(', ')}) — no head-to-head between named candidates yet`);
+    }
+  }
 }
 
 // ---- concurrency: never more than 3 live Wikipedia requests in flight from the whole app ----------
@@ -102,7 +142,7 @@ async function loadRaceUncached(def: RaceDef, deps: { force?: boolean } & Loader
   if (!deps.force && storage) {
     try {
       const hit = JSON.parse(storage.getItem(KEY(def.id)) ?? 'null') as RaceLoad | null;
-      if (hit && now() - Date.parse(hit.fetchedAt) < TTL_MS && hasUsablePolls(hit.parsed)) return { ...hit, source: 'browser-cache' };
+      if (hit && now() - Date.parse(hit.fetchedAt) < TTL_MS && hasUsablePolls(hit.parsed, def.cutoffDate)) return { ...hit, source: 'browser-cache' };
     } catch { /* corrupt entry — ignore */ }
   }
 
@@ -111,8 +151,9 @@ async function loadRaceUncached(def: RaceDef, deps: { force?: boolean } & Loader
     const res = await withSlot(() =>
       fetchWikipediaPolling(def.wikiPage, def.wiki, def.sectionHint, { ...deps.wiki, fetchImpl: deps.fetchImpl, searchQuery: def.searchQuery })
     );
-    const parsed = withKnownCandidates(parsePollData(res.wikitext, { country: GROUP_COUNTRY[def.group] }), def);
-    if (!hasUsablePolls(parsed)) throw new WikiFetchError('no-table', `No usable polling table in "${res.sectionTitle}" of ${res.pageTitle}`);
+    const parsed = shapeForRace(parsePollData(res.wikitext, parseOptionsFor(def)), def);
+    assertRealCandidates(parsed, def);
+    if (!hasUsablePolls(parsed, def.cutoffDate)) throw new WikiFetchError('no-table', `No usable polling table in "${res.sectionTitle}" of ${res.pageTitle}`);
     const load: RaceLoad = {
       raceId: def.id, source: 'live', parsed, fetchedAt: new Date(now()).toISOString(), pageTitle: res.pageTitle, sectionTitle: res.sectionTitle,
       note: res.resolvedFrom ? `Resolved "${res.resolvedFrom}" to "${res.pageTitle}"` : undefined,
@@ -125,8 +166,9 @@ async function loadRaceUncached(def: RaceDef, deps: { force?: boolean } & Loader
 
   try {
     const file = (await fetchJson(`${BASE}data/races/${def.id}.json`.replace(/\/{2,}/g, '/'))) as FallbackFile;
-    const parsed: ParsedPollData = withKnownCandidates({ warnings: [], format: 'wikitext', ...file.parsed }, def);
-    if (!hasUsablePolls(parsed)) throw new Error('fallback file holds no usable polls');
+    const parsed: ParsedPollData = shapeForRace({ warnings: [], format: 'wikitext', ...file.parsed }, def);
+    if (!hasUsablePolls(parsed, def.cutoffDate)) throw new Error('fallback file holds no usable polls');
+      assertRealCandidates(parsed, def);
     return {
       raceId: def.id, source: file.synthetic ? 'seed' : 'fallback', parsed, fetchedAt: file.fetchedAt,
       pageTitle: file.pageTitle, sectionTitle: file.sectionTitle, error: failure, note: file.note,
