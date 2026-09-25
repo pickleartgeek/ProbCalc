@@ -2,6 +2,11 @@ import { Link } from 'react-router-dom';
 import { RaceTicker } from '../components/RaceTicker';
 import { CardMosaic } from '../components/CardMosaic';
 import { GALLERY_COUNTRIES } from '../lib/seedData';
+import { allRaceDefs, type RaceGroup } from '../lib/races/registry';
+
+const GROUP_OF: Record<string, RaceGroup> = { de: 'Germany', us: 'United States', bg: 'Bulgaria', sk: 'Slovakia', uk: 'United Kingdom' };
+const RACES = allRaceDefs();
+const raceCount = (countryId: string) => RACES.filter((r) => r.group === GROUP_OF[countryId]).length;
 
 export function Home() {
   return (
@@ -65,7 +70,7 @@ export function Home() {
                   <div className="text-3xl mb-2">{c.flagEmoji}</div>
                   <div className="font-display font-700 text-base">{c.name}</div>
                   <div className="text-ink-dim text-xs font-data mt-1">
-                    {c.races} race{c.races !== 1 ? 's' : ''} · {c.system}
+                    {raceCount(c.id)} race{raceCount(c.id) !== 1 ? 's' : ''} · {c.system}
                   </div>
                 </div>
               </Link>

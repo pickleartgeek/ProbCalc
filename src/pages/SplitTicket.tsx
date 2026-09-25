@@ -41,6 +41,9 @@ export function SplitTicket() {
   const [tab, setTab] = useState<Tab>('overview');
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [currentGcb, setCurrentGcb] = useState(DEFAULT_CURRENT_GCB_R_MARGIN);
+  // Until the reader moves the slider themselves, it follows the live generic-ballot average (the 'gcb-2026' race: fetched
+  // and modelled by BaseCalc like every other race). The constant above is only the fallback before the first fetch lands.
+  const [gcbTouched, setGcbTouched] = useState(false);
 
   // Real 2024 presidential margins, aggregated off the actual 163,925-precinct
   // set (same manifest.json the Results page's US precinct map reads). Starts
@@ -79,6 +82,11 @@ export function SplitTicket() {
       cancelled = true;
     };
   }, []);
+
+  const liveGcb = livePolls['gcb-2026'];
+  useEffect(() => {
+    if (liveGcb && !gcbTouched) setCurrentGcb(Math.round(liveGcb.margin * 10) / 10);
+  }, [liveGcb, gcbTouched]);
 
   // Every race in every chamber runs through the same environment-shift model
   // (guide III.II, generalized) — House at full weight since it has no
@@ -216,11 +224,23 @@ export function SplitTicket() {
           max={20}
           step={0.5}
           value={-currentGcb}
-          onChange={(e) => setCurrentGcb(-parseFloat(e.target.value))}
+          onChange={(e) => { setGcbTouched(true); setCurrentGcb(-parseFloat(e.target.value)); }}
           className="w-full max-w-md accent-gold"
         />
         <div className="font-data text-sm mt-1">
           Current: <span className="text-gold font-semibold">{gcbLabel(currentGcb)}</span>
+          {liveGcb ? (
+            <span className="text-ink-dim text-xs ml-3">
+              live average {gcbLabel(liveGcb.margin)} · {liveGcb.includedPolls} polls · as of {liveGcb.asOf.slice(0, 10)}
+              {gcbTouched && (
+                <button className="ml-2 text-cyan hover:underline" onClick={() => { setGcbTouched(false); setCurrentGcb(Math.round(liveGcb.margin * 10) / 10); }}>
+                  use live
+                </button>
+              )}
+            </span>
+          ) : (
+            <span className="text-ink-dim text-xs ml-3">no live average yet — starting from the last aggregator snapshot</span>
+          )}
         </div>
       </div>
 
