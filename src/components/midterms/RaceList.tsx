@@ -3,7 +3,7 @@ import { RatingBadge } from './RatingBadge';
 import { RATING_ORDER, type Rating } from '../../lib/midterms/ratings';
 import { getRaceMarginHistory } from '../../lib/midterms/gcbHistory';
 import type { SenateRace, GovernorRace } from '../../lib/midterms/types';
-import { RaceTrendLoader } from '../races/RaceTrend';
+import { RaceCardActions } from '../races/RaceTrend';
 import { midtermRaceDef } from '../../lib/races/registry';
 
 type Race = SenateRace | GovernorRace;
@@ -128,7 +128,7 @@ export function RaceList({
                   Model margin: <span className="text-ink-muted">{pviLabel(r.computedMargin)}</span>
                 </div>
               )}
-              {midtermRaceDef(r.id) && <RaceTrendLoader def={midtermRaceDef(r.id)!} />}
+              {midtermRaceDef(r.id) && <RaceCardActions def={midtermRaceDef(r.id)!} />}
             </div>
           </div>
         ))}
