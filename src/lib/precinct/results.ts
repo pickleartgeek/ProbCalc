@@ -309,6 +309,48 @@ export function simulatePrecinct(
 }
 
 // ---------------------------------------------------------------------------
+// Uniform swing (real precincts -> a simulated result at a different statewide margin)
+// ---------------------------------------------------------------------------
+
+/** Statewide two-party margin across a set of results, in points, poleA positive (e.g. R − D). */
+export function aggregateTwoPartyMargin(results: PrecinctResult[], poleA: string, poleB: string): number | null {
+  let a = 0, b = 0;
+  for (const r of results) { a += r.candidates[poleA] ?? 0; b += r.candidates[poleB] ?? 0; }
+  if (a + b === 0) return null;
+  return ((a - b) / (a + b)) * 100;
+}
+
+/**
+ * Applies a uniform partisan swing to every precinct: each precinct's poleA/poleB VOTE SHARE moves by the same
+ * number of points, turnout (each precinct's total, and any other candidate's votes) held fixed. This is the
+ * standard back-of-envelope way to turn a real, granular result into "what would this have looked like at a
+ * different statewide margin" — the same assumption behind the House's state-PVI anchor (environmentShift.ts),
+ * just applied precinct by precinct instead of state by state. It is a simplification (real swings are never
+ * perfectly uniform — see the guide's discussion of differential swing) but needs no extra data beyond the real
+ * precincts already on hand, and is honest about being a simulation rather than a measurement (see the caller's
+ * "simulated" labeling — never mix these results into anything presented as real 2026 returns).
+ */
+export function applyUniformSwing(
+  results: PrecinctResult[],
+  deltaPoints: number,
+  poleA: string,
+  poleB: string,
+  thresholds?: VictoryThresholds
+): PrecinctResult[] {
+  if (deltaPoints === 0) return results;
+  const halfShift = deltaPoints / 2 / 100; // points -> a 0-1 share delta, split between the two poles
+  return results.map((r) => {
+    const a = r.candidates[poleA] ?? 0;
+    const b = r.candidates[poleB] ?? 0;
+    const twoPartyTotal = a + b;
+    if (twoPartyTotal === 0) return r;
+    const newAShare = Math.min(1, Math.max(0, a / twoPartyTotal + halfShift));
+    const candidates = { ...r.candidates, [poleA]: newAShare * twoPartyTotal, [poleB]: (1 - newAShare) * twoPartyTotal };
+    return computeResult(r.id, candidates, r.meta, thresholds);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Color scales
 // ---------------------------------------------------------------------------
 
