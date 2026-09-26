@@ -3,7 +3,9 @@ import { STATE_NAMES, PREVIOUS_GCB_R_MARGIN } from './stateGrid';
 import { RATING_R_PROB, ratingFromRProb, rProbToPseudoMargin, pseudoMarginToRProb } from './ratings';
 import { applyEnvironmentShiftMargin } from '../environmentShift';
 
-// Same convention as senateData.ts: real 2026 field, PLACEHOLDER ratings.
+// Same convention as senateData.ts: real 2026 field, a bootstrap-prior `rating` that computeGovernorRaces() below
+// overrides with a real-data-derived one whenever live polling, a hand-researched snapshot, or the environment shift
+// gives it something better to go on.
 const RAW: Omit<GovernorRace, 'id' | 'stateName'>[] = [
   { stateAbbr: 'AL', incumbentParty: 'R', incumbentName: null, open: true, rating: 'SafeR' },
   { stateAbbr: 'AK', incumbentParty: 'R', incumbentName: null, open: true, rating: 'LikelyR' },

@@ -3,11 +3,11 @@ import { STATE_NAMES, PREVIOUS_GCB_R_MARGIN } from './stateGrid';
 import { RATING_R_PROB, ratingFromRProb, rProbToPseudoMargin, pseudoMarginToRProb } from './ratings';
 import { applyEnvironmentShiftMargin } from '../environmentShift';
 
-// The race field (state, seat class, incumbent, open/retiring status) reflects
-// the actual 2026 cycle as of this writing. The `rating` on every race is a
-// PLACEHOLDER — a reasonable-looking starting point, not a real forecast.
-// Swap these for Cook/Sabato/your-own-model ratings whenever you wire in
-// real data; nothing else in the app needs to change.
+// The race field (state, seat class, incumbent, open/retiring status) reflects the actual 2026 cycle as of this
+// writing. The `rating` on every race below is only a BOOTSTRAP PRIOR — computeSenateRaces() below overrides it every
+// render with a rating derived from real data whenever any exists (live Wikipedia polling > a hand-researched
+// pollMargin snapshot > the 2024 precinct/ticket-split anchor), environment-shifted by the generic ballot. A race
+// only actually shows this hand-set band when none of that real data exists for it yet.
 const RAW: Omit<SenateRace, 'id' | 'stateName'>[] = [
   { stateAbbr: 'AL', seatClass: 2, special: false, incumbentParty: 'R', incumbentName: null, open: true, rating: 'SafeR' },
   { stateAbbr: 'AK', seatClass: 2, special: false, incumbentParty: 'R', incumbentName: 'Dan Sullivan', open: false, rating: 'LeanR',
