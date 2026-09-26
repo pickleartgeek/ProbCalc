@@ -14,7 +14,11 @@ import { StateTileMap } from '../components/midterms/StateTileMap';
 import { HouseMosaic } from '../components/midterms/HouseMosaic';
 import { ControlGauge } from '../components/midterms/ControlGauge';
 import { RaceList } from '../components/midterms/RaceList';
+import { RatingBadge } from '../components/midterms/RatingBadge';
 import { StatePrecinctPanel } from '../components/precinct/StatePrecinctPanel';
+import { RaceCardActions } from '../components/races/RaceTrend';
+import { midtermRaceDef } from '../lib/races/registry';
+import type { SenateRace, GovernorRace } from '../lib/midterms/types';
 
 type Tab = 'overview' | 'senate' | 'governors' | 'house';
 
@@ -35,6 +39,55 @@ function favoredLine(chamber: string, pRControl: number, pDControl: number): str
   const pct = Math.round(Math.max(pRControl, pDControl) * 100);
   if (pct < 55) return `${chamber} is a toss-up (${favored} lead narrowly, ${pct}%)`;
   return `${favored} favored to win the ${chamber} (${pct}%)`;
+}
+
+/** What StatePrecinctPanel needs to swing the state's real 2024 precincts to this specific race's computed margin. */
+function raceSimulate(race: (SenateRace | GovernorRace) | null | undefined, kind: 'Senate' | 'Governor') {
+  if (!race || race.computedMargin === undefined) return null;
+  const label = race.demCandidate || race.repCandidate ? `${race.demCandidate ?? 'Dem'} (D) vs ${race.repCandidate ?? 'Rep'} (R)` : `${kind} race`;
+  return { targetMarginR: race.computedMargin, label };
+}
+
+/**
+ * Clicking a race used to show only its name and one poll line. This gives it the exact same live BaseCalc trend and
+ * one-click BaseCalc/ProbCalc/Election-night entry a Gallery card has (RaceCardActions), plus the model's own
+ * computed rating and margin, which Gallery has no notion of — the two views of the same race side by side.
+ */
+function RaceWindow({ race, kind, livePolls }: { race: SenateRace | GovernorRace; kind: 'Senate' | 'Governor'; livePolls: Record<string, LivePollEntry> }) {
+  const def = midtermRaceDef(race.id);
+  const live = livePolls[race.id];
+  return (
+    <div className="bg-panel-raised border border-hairline-bright rounded-lg p-4">
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="text-ink-dim text-xs uppercase tracking-wide">{kind} &middot; {race.stateName}</div>
+        <RatingBadge rating={race.rating} />
+      </div>
+      {race.demCandidate || race.repCandidate ? (
+        <div className="font-display font-700">
+          <span className="text-cyan">{race.demCandidate ?? '?'} (D)</span>
+          {' vs '}
+          <span className="text-red-call">{race.repCandidate ?? '?'} (R)</span>
+        </div>
+      ) : (
+        <div className="font-display font-700">
+          {race.open ? 'Open seat' : race.incumbentName} ({race.incumbentParty})
+        </div>
+      )}
+      <div className="text-ink-dim text-[11px] font-data mt-1 space-y-0.5">
+        {race.computedMargin !== undefined && <div>Model margin: <span className="text-ink-muted">{gcbLabel(race.computedMargin)}</span></div>}
+        {live ? (
+          <div className="text-cyan">
+            &#9679; Live: {gcbLabel(live.margin)} avg from {live.includedPolls} polls &mdash; auto-updated {new Date(live.asOf).toLocaleDateString()}
+          </div>
+        ) : (
+          race.pollMargin != null && race.pollSource && (
+            <div>Real polling: {gcbLabel(race.pollMargin)} avg &mdash; {race.pollSource}{race.pollAsOf ? ` (as of ${race.pollAsOf})` : ''}</div>
+          )
+        )}
+      </div>
+      {def && <RaceCardActions def={def} />}
+    </div>
+  );
 }
 
 export function SplitTicket() {
@@ -109,6 +162,16 @@ export function SplitTicket() {
   );
   const HOUSE_SEATS = useMemo(() => generateHouseSeats(currentGcb, statePvi), [currentGcb, statePvi]);
 
+  // How much of the rating for every Senate/governor race is coming from something real (auto-fetched live polling,
+  // or a hand-researched pollMargin snapshot) versus the 2024 precinct/rating-derived prior — the honest version of
+  // what the old "placeholder ratings" banner used to just assert without checking.
+  const coverage = useMemo(() => {
+    const all = [...SENATE_RACES, ...GOVERNOR_RACES];
+    const live = all.filter((r) => livePolls[r.id]).length;
+    const hand = all.filter((r) => !livePolls[r.id] && r.pollMargin != null).length;
+    return { total: all.length, live, hand, anchored: all.length - live - hand };
+  }, [SENATE_RACES, GOVERNOR_RACES, livePolls]);
+
   const senateSim = useMemo(() => simulateChamber(SENATE_RACES, SENATE_BASELINE, 'senate-2026'), [SENATE_RACES]);
   const governorSim = useMemo(() => simulateChamber(GOVERNOR_RACES, GOVERNOR_BASELINE, 'governors-2026'), [GOVERNOR_RACES]);
   const houseSim = useMemo(() => simulateChamber(HOUSE_SEATS, HOUSE_BASELINE, 'house-2026'), [HOUSE_SEATS]);
@@ -179,16 +242,20 @@ export function SplitTicket() {
       </p>
 
       <div className="bg-gold/5 border border-gold/30 rounded-lg px-4 py-2.5 mb-8 text-xs text-ink-muted">
-        <span className="text-gold font-semibold">Placeholder ratings, real anchors.</span> The race
-        field (states, incumbents, open seats) is real for Senate and governors. House districts anchor
-        to the <span className="text-ink">real 2024 presidential margin</span>
+        <span className="text-gold font-semibold">Ratings are computed, not hand-set.</span> Every Senate and
+        governor rating below is derived live: {coverage.live} of {coverage.total} races are currently blending a real, auto-refreshed
+        Wikipedia polling average (see the Gallery) into the environment-shift model; {coverage.hand} more use a
+        hand-researched polling snapshot; the remaining {coverage.anchored} fall back to the 2024
+        precinct/ticket-split anchor below, nudged by the generic-ballot slider — a reasonable prior, not a
+        forecast, until live polling exists for them too. House districts anchor to the{' '}
+        <span className="text-ink">real 2024 presidential margin</span>
         {pviSource ? (
           <> ({pviSource.realCount} states from {pviSource.precinctCount.toLocaleString()} real
           precincts{pviSource.realCount < 50 ? `, ${50 - pviSource.realCount} on fallback` : ''})</>
         ) : (
           ' (loading…)'
         )}
-        . Senate races anchor to the{' '}
+        . Senate races without their own live polling anchor instead to the{' '}
         <span className="text-ink">real 2024 President-vs-Senate ticket-split</span>
         {senateAnchor ? (
           <>
@@ -200,9 +267,8 @@ export function SplitTicket() {
         ) : (
           ' (loading…)'
         )}
-        . Every <span className="text-ink">rating band</span> is still a synthetic starting point, not a
-        forecast — swap those in{' '}
-        <code className="font-data text-[11px] text-cyan">src/lib/midterms/</code> whenever you have them.
+        . Click any race for its live BaseCalc trend and a simulated 2026 precinct map (real 2024 precincts,
+        uniformly swung to the computed margin).
       </div>
 
       <div className="bg-panel border border-hairline rounded-lg px-5 py-4 mb-8">
@@ -323,60 +389,15 @@ export function SplitTicket() {
           </div>
 
           {(selectedSenate || selectedGov) && (
-            <div className="bg-panel-raised border border-hairline-bright rounded-lg p-4 flex flex-wrap gap-6">
-              {selectedSenate && (
-                <div>
-                  <div className="text-ink-dim text-xs uppercase tracking-wide mb-1">Senate &middot; {selectedSenate.stateName}</div>
-                  {selectedSenate.demCandidate || selectedSenate.repCandidate ? (
-                    <div className="font-display font-700">
-                      <span className="text-cyan">{selectedSenate.demCandidate ?? '?'} (D)</span>
-                      {' vs '}
-                      <span className="text-red-call">{selectedSenate.repCandidate ?? '?'} (R)</span>
-                    </div>
-                  ) : (
-                    <div className="font-display font-700">
-                      {selectedSenate.open ? 'Open seat' : selectedSenate.incumbentName} ({selectedSenate.incumbentParty})
-                    </div>
-                  )}
-                  {livePolls[selectedSenate.id] ? (
-                    <div className="text-cyan text-[11px] font-data mt-1">
-                      &#9679; Live: {gcbLabel(livePolls[selectedSenate.id].margin)} avg from{' '}
-                      {livePolls[selectedSenate.id].includedPolls} polls &mdash; auto-updated{' '}
-                      {new Date(livePolls[selectedSenate.id].asOf).toLocaleDateString()}
-                    </div>
-                  ) : (
-                    selectedSenate.pollMargin != null &&
-                    selectedSenate.pollSource && (
-                      <div className="text-ink-dim text-[11px] font-data mt-1">
-                        Real polling: {gcbLabel(selectedSenate.pollMargin)} avg &mdash; {selectedSenate.pollSource}
-                        {selectedSenate.pollAsOf ? ` (as of ${selectedSenate.pollAsOf})` : ''}
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-              {selectedGov && (
-                <div>
-                  <div className="text-ink-dim text-xs uppercase tracking-wide mb-1">Governor &middot; {selectedGov.stateName}</div>
-                  {selectedGov.demCandidate || selectedGov.repCandidate ? (
-                    <div className="font-display font-700">
-                      <span className="text-cyan">{selectedGov.demCandidate ?? '?'} (D)</span>
-                      {' vs '}
-                      <span className="text-red-call">{selectedGov.repCandidate ?? '?'} (R)</span>
-                    </div>
-                  ) : (
-                    <div className="font-display font-700">
-                      {selectedGov.open ? 'Open seat' : selectedGov.incumbentName} ({selectedGov.incumbentParty})
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="grid md:grid-cols-2 gap-4">
+              {selectedSenate && <RaceWindow race={selectedSenate} kind="Senate" livePolls={livePolls} />}
+              {selectedGov && <RaceWindow race={selectedGov} kind="Governor" livePolls={livePolls} />}
             </div>
           )}
 
           {selectedState && (
             <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} />
+              <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate ?? selectedGov, selectedSenate ? 'Senate' : 'Governor')} />
             </div>
           )}
         </div>
@@ -390,7 +411,7 @@ export function SplitTicket() {
           </div>
           {selectedState && (
             <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} />
+              <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate, 'Senate')} />
             </div>
           )}
           <RaceList races={SENATE_RACES} selected={selectedState} onSelect={setSelectedState} pvi={statePvi} />
@@ -405,7 +426,7 @@ export function SplitTicket() {
           </div>
           {selectedState && (
             <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} />
+              <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedGov, 'Governor')} />
             </div>
           )}
           <RaceList races={GOVERNOR_RACES} selected={selectedState} onSelect={setSelectedState} pvi={statePvi} />
