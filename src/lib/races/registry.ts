@@ -100,12 +100,11 @@ export const GALLERY_RACES: RaceDef[] = [
   {
     // The national generic congressional ballot — the environment number Split Ticket's whole model hangs off. It is
     // fetched, cached, seeded and modelled exactly like every other race here, so it gets a card and a BaseCalc trajectory.
-    // The polls live in year-headed tables ("2025–2026") on the elections page, not on a page of their own.
-    // Two settings a state race doesn't need: a national average has huge, frequent trackers (Morning Consult runs 24,000–
-    // 30,000 respondents a week) that would otherwise outweigh ~30 normal polls each, so effective sample is capped; and its
-    // history runs back to 2025, so a trailing 90-day window keeps the headline about *now* rather than the whole cycle.
+    // The polls live in year-headed tables ("2025–2026") on the elections page, not on a page of their own, and that
+    // page is one of Wikipedia's most actively restructured — the "|" hint tries the stable parent heading ("Generic
+    // ballot") AND the year label, since either one going stale (a renamed/removed heading) shouldn't lose the other.
     id: 'gcb-2026', title: 'Generic congressional ballot 2026', group: 'United States', region: 'United States', electionDate: MIDTERM_DATE, votingSystem: 'FPTP',
-    wikiPage: '2026 United States elections', sectionHint: '2025–2026', searchQuery: '2026 United States elections generic ballot polling', kind: 'gallery',
+    wikiPage: '2026 United States elections', sectionHint: 'generic ballot|2025–2026', searchQuery: '2026 United States elections generic ballot polling', kind: 'gallery',
     maxSampleSize: 3000, recencyWindowDays: 90,
   },
   ...['sen-ga', 'sen-me', 'sen-mi', 'sen-nc'].map((id) => ({ ...midtermRaceDef(id)!, kind: 'gallery' as const })),

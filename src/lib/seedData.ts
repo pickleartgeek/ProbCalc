@@ -1,4 +1,5 @@
 import type { Party } from './types';
+import type { RaceGroup } from './races/registry';
 import { registryColor as c, US_DEM, US_REP } from './partyRegistry';
 
 export interface TrackedRace {
@@ -80,6 +81,8 @@ export const TRACKED_RACES: TrackedRace[] = [
 
 export interface GalleryCountry {
   id: string;
+  /** The registry group whose races belong to this country — the one place a new nation links its races to its card. */
+  group: RaceGroup;
   name: string;
   flagEmoji: string;
   races: number;
@@ -92,9 +95,9 @@ export interface GalleryCountry {
 }
 
 export const GALLERY_COUNTRIES: GalleryCountry[] = [
-  { id: 'de', name: 'Germany', flagEmoji: '🇩🇪', races: 3, system: 'Party List (MMP)', colors: [c('DE', 'union'), c('DE', 'spd'), c('DE', 'fdp'), c('DE', 'afd'), c('DE', 'gruene')], isoNumeric: '276' },
-  { id: 'us', name: 'United States', flagEmoji: '🇺🇸', races: 12, system: 'FPTP', colors: [US_DEM, US_REP], isoNumeric: '840' },
-  { id: 'bg', name: 'Bulgaria', flagEmoji: '🇧🇬', races: 1, system: "D'Hondt", colors: ['#0033A0', '#F7941D', '#004225', '#D2001C', '#5B2C6F'], isoNumeric: '100' },
-  { id: 'sk', name: 'Slovakia', flagEmoji: '🇸🇰', races: 2, system: "D'Hondt", colors: [c('SK', 'smersd'), c('SK', 'ps'), c('SK', 'hlassd'), c('SK', 'kdh')], isoNumeric: '703' },
-  { id: 'uk', name: 'United Kingdom', flagEmoji: '🇬🇧', races: 1, system: 'FPTP', colors: [c('UK', 'labour'), c('UK', 'conservative'), c('UK', 'reform'), c('UK', 'libdem'), c('UK', 'green')], isoNumeric: '826' },
+  { id: 'de', group: 'Germany', name: 'Germany', flagEmoji: '🇩🇪', races: 3, system: 'Party List (MMP)', colors: [c('DE', 'union'), c('DE', 'spd'), c('DE', 'fdp'), c('DE', 'afd'), c('DE', 'gruene')], isoNumeric: '276' },
+  { id: 'us', group: 'United States', name: 'United States', flagEmoji: '🇺🇸', races: 12, system: 'FPTP', colors: [US_DEM, US_REP], isoNumeric: '840' },
+  { id: 'bg', group: 'Bulgaria', name: 'Bulgaria', flagEmoji: '🇧🇬', races: 1, system: "D'Hondt", colors: ['#0033A0', '#F7941D', '#004225', '#D2001C', '#5B2C6F'], isoNumeric: '100' },
+  { id: 'sk', group: 'Slovakia', name: 'Slovakia', flagEmoji: '🇸🇰', races: 2, system: "D'Hondt", colors: [c('SK', 'smersd'), c('SK', 'ps'), c('SK', 'hlassd'), c('SK', 'kdh')], isoNumeric: '703' },
+  { id: 'uk', group: 'United Kingdom', name: 'United Kingdom', flagEmoji: '🇬🇧', races: 1, system: 'FPTP', colors: [c('UK', 'labour'), c('UK', 'conservative'), c('UK', 'reform'), c('UK', 'libdem'), c('UK', 'green')], isoNumeric: '826' },
 ];

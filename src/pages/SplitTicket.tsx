@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { computeSenateRaces } from '../lib/midterms/senateData';
 import { computeGovernorRaces } from '../lib/midterms/governorData';
@@ -17,7 +17,7 @@ import { RaceList } from '../components/midterms/RaceList';
 import { RatingBadge } from '../components/midterms/RatingBadge';
 import { StatePrecinctPanel } from '../components/precinct/StatePrecinctPanel';
 import { RaceCardActions } from '../components/races/RaceTrend';
-import { midtermRaceDef } from '../lib/races/registry';
+import { midtermRaceDef, raceDefById } from '../lib/races/registry';
 import type { SenateRace, GovernorRace } from '../lib/midterms/types';
 
 type Tab = 'overview' | 'senate' | 'governors' | 'house';
@@ -39,6 +39,22 @@ function favoredLine(chamber: string, pRControl: number, pDControl: number): str
   const pct = Math.round(Math.max(pRControl, pDControl) * 100);
   if (pct < 55) return `${chamber} is a toss-up (${favored} lead narrowly, ${pct}%)`;
   return `${favored} favored to win the ${chamber} (${pct}%)`;
+}
+
+/** A collapsed-by-default explanation, for the methodology paragraph and the session-exploration chart — both are
+ *  real and worth having, but neither needs to be read before someone's seen the headline numbers. Keeping the
+ *  default view to "here's what's true" and tucking "here's how we know" one click away is the main fix for a
+ *  page that otherwise reads as one long wall of boxes before you reach anything interactive. */
+function Disclosure({ summary, children, defaultOpen = false }: { summary: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  return (
+    <details className="group" open={defaultOpen}>
+      <summary className="cursor-pointer select-none list-none flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink">
+        <span className="inline-block transition-transform group-open:rotate-90 text-ink-dim">&#9656;</span>
+        {summary}
+      </summary>
+      <div className="mt-2">{children}</div>
+    </details>
+  );
 }
 
 /** What StatePrecinctPanel needs to swing the state's real 2024 precincts to this specific race's computed margin. */
@@ -89,6 +105,8 @@ function RaceWindow({ race, kind, livePolls }: { race: SenateRace | GovernorRace
     </div>
   );
 }
+
+const GCB_DEF = raceDefById('gcb-2026');
 
 export function SplitTicket() {
   const [tab, setTab] = useState<Tab>('overview');
@@ -237,78 +255,130 @@ export function SplitTicket() {
           2026 MIDTERMS
         </span>
       </div>
-      <p className="text-ink-muted mb-4 max-w-2xl">
+      <p className="text-ink-muted mb-6 max-w-2xl">
         Senate, House, and governors — one board. Every race, one probabilistic engine.
       </p>
 
-      <div className="bg-gold/5 border border-gold/30 rounded-lg px-4 py-2.5 mb-8 text-xs text-ink-muted">
-        <span className="text-gold font-semibold">Ratings are computed, not hand-set.</span> Every Senate and
-        governor rating below is derived live: {coverage.live} of {coverage.total} races are currently blending a real, auto-refreshed
-        Wikipedia polling average (see the Gallery) into the environment-shift model; {coverage.hand} more use a
-        hand-researched polling snapshot; the remaining {coverage.anchored} fall back to the 2024
-        precinct/ticket-split anchor below, nudged by the generic-ballot slider — a reasonable prior, not a
-        forecast, until live polling exists for them too. House districts anchor to the{' '}
-        <span className="text-ink">real 2024 presidential margin</span>
-        {pviSource ? (
-          <> ({pviSource.realCount} states from {pviSource.precinctCount.toLocaleString()} real
-          precincts{pviSource.realCount < 50 ? `, ${50 - pviSource.realCount} on fallback` : ''})</>
-        ) : (
-          ' (loading…)'
-        )}
-        . Senate races without their own live polling anchor instead to the{' '}
-        <span className="text-ink">real 2024 President-vs-Senate ticket-split</span>
-        {senateAnchor ? (
-          <>
-            {' '}— {senateAnchor.realStates.size} states measured directly from{' '}
-            {senateAnchor.precinctCount.toLocaleString()} real precincts, the rest estimated by applying
-            the measured average split ({gcbLabel(senateAnchor.universalOffset)} senate-vs-president) as a
-            universal shift on top of that state's real presidential margin
-          </>
-        ) : (
-          ' (loading…)'
-        )}
-        . Click any race for its live BaseCalc trend and a simulated 2026 precinct map (real 2024 precincts,
-        uniformly swung to the computed margin).
-      </div>
-
-      <div className="bg-panel border border-hairline rounded-lg px-5 py-4 mb-8">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-          <h3 className="font-display font-700 text-base">Generic ballot</h3>
-          <span className="font-data text-xs text-ink-dim">
-            2024 baseline: <span className="text-ink">{gcbLabel(PREVIOUS_GCB_R_MARGIN)}</span>
-          </span>
-        </div>
-        <p className="text-ink-dim text-xs mb-3 max-w-2xl">
-          Every race — Senate, governors, and all 435 House seats — is extrapolated from this
-          number via the guide's environment-shift model (III.II): House rides it almost
-          entirely (no independent district polling), Senate and governors only get a light
-          nudge from it since those races are individually polled.
-        </p>
-        <input
-          type="range"
-          min={-20}
-          max={20}
-          step={0.5}
-          value={-currentGcb}
-          onChange={(e) => { setGcbTouched(true); setCurrentGcb(-parseFloat(e.target.value)); }}
-          className="w-full max-w-md accent-gold"
-        />
-        <div className="font-data text-sm mt-1">
-          Current: <span className="text-gold font-semibold">{gcbLabel(currentGcb)}</span>
-          {liveGcb ? (
-            <span className="text-ink-dim text-xs ml-3">
-              live average {gcbLabel(liveGcb.margin)} · {liveGcb.includedPolls} polls · as of {liveGcb.asOf.slice(0, 10)}
-              {gcbTouched && (
-                <button className="ml-2 text-cyan hover:underline" onClick={() => { setGcbTouched(false); setCurrentGcb(Math.round(liveGcb.margin * 10) / 10); }}>
-                  use live
-                </button>
+      {/* GCB hero — the national environment number every race on this page derives from, fetched and modelled
+          exactly like every other race (see the Gallery), so it leads the page instead of sitting halfway down it. */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-gold/10 via-panel to-panel border border-gold/30 rounded-xl px-5 sm:px-7 py-6 mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-1">
+          <div>
+            <div className="text-ink-dim text-xs uppercase tracking-widest font-data mb-1.5">
+              Generic congressional ballot &middot; the number everything below is built on
+            </div>
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span
+                className="font-display font-800 text-5xl sm:text-6xl tracking-tight leading-none"
+                style={{ color: currentGcb > 0.05 ? 'var(--red-call, #ea4b4b)' : currentGcb < -0.05 ? 'var(--cyan, #38bdf8)' : undefined }}
+              >
+                {gcbLabel(currentGcb)}
+              </span>
+              {liveGcb ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-cyan font-data">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan pulse-live" />
+                  live avg {gcbLabel(liveGcb.margin)} &middot; {liveGcb.includedPolls} polls &middot; as of {liveGcb.asOf.slice(0, 10)}
+                  {gcbTouched && (
+                    <button
+                      className="ml-1 text-cyan hover:underline"
+                      onClick={() => { setGcbTouched(false); setCurrentGcb(Math.round(liveGcb.margin * 10) / 10); }}
+                    >
+                      use live
+                    </button>
+                  )}
+                </span>
+              ) : (
+                <span className="text-ink-dim text-xs font-data">no live average yet &mdash; starting from the last aggregator snapshot</span>
               )}
-            </span>
-          ) : (
-            <span className="text-ink-dim text-xs ml-3">no live average yet — starting from the last aggregator snapshot</span>
+            </div>
+          </div>
+          <div className="text-right font-data text-xs text-ink-dim shrink-0">
+            2024 baseline<br /><span className="text-ink text-sm">{gcbLabel(PREVIOUS_GCB_R_MARGIN)}</span>
+          </div>
+        </div>
+
+        {GCB_DEF && (
+          <div className="mt-3">
+            <RaceCardActions def={GCB_DEF} />
+          </div>
+        )}
+
+        <div className="mt-5 pt-4 border-t border-hairline/60">
+          <p className="text-ink-dim text-xs mb-2 max-w-2xl">
+            Explore a different national environment &mdash; House rides it almost entirely (no independent district
+            polling), Senate and governors get a light nudge since those races are individually polled. Every tab
+            below re-derives live as you move this.
+          </p>
+          <input
+            type="range"
+            min={-20}
+            max={20}
+            step={0.5}
+            value={-currentGcb}
+            onChange={(e) => { setGcbTouched(true); setCurrentGcb(-parseFloat(e.target.value)); }}
+            className="w-full max-w-md accent-gold"
+          />
+
+          {gcbTrend.length >= 2 && (
+            <Disclosure summary={`See how exploring has moved the odds (${gcbTrend.length} readings this session)`}>
+              <div style={{ width: '100%', height: 160 }}>
+                <ResponsiveContainer>
+                  <LineChart data={gcbTrend} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline, #2a3348)" opacity={0.3} />
+                    <XAxis dataKey="i" hide />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={32} />
+                    <Tooltip
+                      contentStyle={{ background: '#12172a', border: '1px solid #2a3348', fontSize: 11, fontFamily: 'monospace' }}
+                      labelFormatter={(i) => `Reading #${Number(i) + 1}`}
+                    />
+                    <Line type="monotone" dataKey="Senate R%" stroke="#ea4b4b" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="House R%" stroke="#f5c542" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="Governors R%" stroke="#3b82f6" dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-ink-dim text-[11px] mt-1">
+                Not historical polling — this traces P(R control) each time you've moved the slider above this
+                session, persisted locally so it builds up over time as you explore scenarios.
+              </p>
+            </Disclosure>
           )}
         </div>
       </div>
+
+      <Disclosure
+        summary={<span><span className="text-ink">Ratings are computed, not hand-set</span> — {coverage.live} of {coverage.total} races use live polling; how the rest are derived</span>}
+      >
+        <div className="bg-panel border border-hairline rounded-lg px-4 py-3 text-xs text-ink-muted mb-2">
+          Every Senate and governor rating is derived live: {coverage.live} of {coverage.total} races blend a real, auto-refreshed
+          Wikipedia polling average (see the Gallery) into the environment-shift model; {coverage.hand} more use a
+          hand-researched polling snapshot; the remaining {coverage.anchored} fall back to the 2024
+          precinct/ticket-split anchor, nudged by the generic-ballot slider above — a reasonable prior, not a
+          forecast, until live polling exists for them too. House districts anchor to the{' '}
+          <span className="text-ink">real 2024 presidential margin</span>
+          {pviSource ? (
+            <> ({pviSource.realCount} states from {pviSource.precinctCount.toLocaleString()} real
+            precincts{pviSource.realCount < 50 ? `, ${50 - pviSource.realCount} on fallback` : ''})</>
+          ) : (
+            ' (loading…)'
+          )}
+          . Senate races without their own live polling anchor instead to the{' '}
+          <span className="text-ink">real 2024 President-vs-Senate ticket-split</span>
+          {senateAnchor ? (
+            <>
+              {' '}— {senateAnchor.realStates.size} states measured directly from{' '}
+              {senateAnchor.precinctCount.toLocaleString()} real precincts, the rest estimated by applying
+              the measured average split ({gcbLabel(senateAnchor.universalOffset)} senate-vs-president) as a
+              universal shift on top of that state's real presidential margin
+            </>
+          ) : (
+            ' (loading…)'
+          )}
+          . Click any race for its live BaseCalc trend and a simulated 2026 precinct map (real 2024 precincts,
+          uniformly swung to the computed margin).
+        </div>
+      </Disclosure>
+      <div className="mb-8" />
 
       {/* Tabs */}
       <div className="flex gap-1.5 mb-8 border-b border-hairline">
@@ -329,77 +399,48 @@ export function SplitTicket() {
 
       {tab === 'overview' && (
         <div className="space-y-6">
-          {gcbTrend.length >= 2 && (
-            <div className="bg-panel border border-hairline rounded-lg px-5 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide">
-                  GCB &amp; chamber odds — this session
-                </h3>
-                <span className="text-ink-dim text-[11px] font-data">{gcbTrend.length} readings explored</span>
+          <div>
+            <p className="font-data text-sm text-ink-muted mb-3">
+              {favoredLine('the Senate', senateSim.pRControl, senateSim.pDControl)} &middot;{' '}
+              {favoredLine('the House', houseSim.pRControl, houseSim.pDControl)} &middot;{' '}
+              {favoredLine('governorships', governorSim.pRControl, governorSim.pDControl)}
+            </p>
+            <div className="grid md:grid-cols-3 gap-5">
+              <ControlGauge title="Senate" sim={senateSim} baseline={SENATE_BASELINE} />
+              <ControlGauge title="Governors" sim={governorSim} baseline={GOVERNOR_BASELINE} />
+              <ControlGauge title="House" sim={houseSim} baseline={HOUSE_BASELINE} />
+            </div>
+          </div>
+
+          <div className="bg-panel border border-hairline rounded-lg p-5">
+            <div className="flex items-baseline justify-between gap-2 mb-1">
+              <h3 className="font-display font-700 text-lg">By state</h3>
+              <p className="text-ink-dim text-xs">click a state on either map — a state with both races up shows both</p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-5 mt-3">
+              <div>
+                <h4 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide mb-2">Senate</h4>
+                <StateTileMap ratings={senateRatings} onSelect={setSelectedState} selected={selectedState} />
               </div>
-              <div style={{ width: '100%', height: 180 }}>
-                <ResponsiveContainer>
-                  <LineChart data={gcbTrend} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline, #2a3348)" opacity={0.3} />
-                    <XAxis dataKey="i" hide />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={32} />
-                    <Tooltip
-                      contentStyle={{ background: '#12172a', border: '1px solid #2a3348', fontSize: 11, fontFamily: 'monospace' }}
-                      labelFormatter={(i) => `Reading #${Number(i) + 1}`}
-                    />
-                    <Line type="monotone" dataKey="Senate R%" stroke="#ea4b4b" dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="House R%" stroke="#f5c542" dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="Governors R%" stroke="#3b82f6" dot={false} strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div>
+                <h4 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide mb-2">Governors</h4>
+                <StateTileMap ratings={governorRatings} onSelect={setSelectedState} selected={selectedState} />
               </div>
-              <p className="text-ink-dim text-[11px] mt-1">
-                Not historical polling — this traces P(R control) each time you've moved the GCB slider this
-                session, persisted locally so it builds up over time as you explore scenarios.
-              </p>
             </div>
-          )}
 
-          <div className="bg-panel-raised border border-hairline-bright rounded-lg px-5 py-4">
-            <h3 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide mb-2">
-              Headline
-            </h3>
-            <ul className="space-y-1 font-data text-sm">
-              <li>&bull; {favoredLine('Senate', senateSim.pRControl, senateSim.pDControl)}</li>
-              <li>&bull; {favoredLine('House', houseSim.pRControl, houseSim.pDControl)}</li>
-              <li>&bull; {favoredLine('governorships', governorSim.pRControl, governorSim.pDControl)}</li>
-            </ul>
+            {(selectedSenate || selectedGov) && (
+              <div className="grid md:grid-cols-2 gap-4 mt-5 pt-5 border-t border-hairline">
+                {selectedSenate && <RaceWindow race={selectedSenate} kind="Senate" livePolls={livePolls} />}
+                {selectedGov && <RaceWindow race={selectedGov} kind="Governor" livePolls={livePolls} />}
+              </div>
+            )}
+
+            {selectedState && (
+              <div className="mt-5 pt-5 border-t border-hairline">
+                <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate ?? selectedGov, selectedSenate ? 'Senate' : 'Governor')} />
+              </div>
+            )}
           </div>
-
-          <div className="grid md:grid-cols-3 gap-5">
-            <ControlGauge title="Senate" sim={senateSim} baseline={SENATE_BASELINE} />
-            <ControlGauge title="Governors" sim={governorSim} baseline={GOVERNOR_BASELINE} />
-            <ControlGauge title="House" sim={houseSim} baseline={HOUSE_BASELINE} />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-5">
-            <div className="bg-panel border border-hairline rounded-lg p-5">
-              <h3 className="font-display font-700 text-lg mb-3">Senate map</h3>
-              <StateTileMap ratings={senateRatings} onSelect={setSelectedState} selected={selectedState} />
-            </div>
-            <div className="bg-panel border border-hairline rounded-lg p-5">
-              <h3 className="font-display font-700 text-lg mb-3">Governors map</h3>
-              <StateTileMap ratings={governorRatings} onSelect={setSelectedState} selected={selectedState} />
-            </div>
-          </div>
-
-          {(selectedSenate || selectedGov) && (
-            <div className="grid md:grid-cols-2 gap-4">
-              {selectedSenate && <RaceWindow race={selectedSenate} kind="Senate" livePolls={livePolls} />}
-              {selectedGov && <RaceWindow race={selectedGov} kind="Governor" livePolls={livePolls} />}
-            </div>
-          )}
-
-          {selectedState && (
-            <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate ?? selectedGov, selectedSenate ? 'Senate' : 'Governor')} />
-            </div>
-          )}
         </div>
       )}
 
@@ -408,12 +449,12 @@ export function SplitTicket() {
           <ControlGauge title="Senate" sim={senateSim} baseline={SENATE_BASELINE} />
           <div className="bg-panel border border-hairline rounded-lg p-5">
             <StateTileMap ratings={senateRatings} onSelect={setSelectedState} selected={selectedState} />
+            {selectedState && (
+              <div className="mt-5 pt-5 border-t border-hairline">
+                <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate, 'Senate')} />
+              </div>
+            )}
           </div>
-          {selectedState && (
-            <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate, 'Senate')} />
-            </div>
-          )}
           <RaceList races={SENATE_RACES} selected={selectedState} onSelect={setSelectedState} pvi={statePvi} />
         </div>
       )}
@@ -423,12 +464,12 @@ export function SplitTicket() {
           <ControlGauge title="Governors" sim={governorSim} baseline={GOVERNOR_BASELINE} />
           <div className="bg-panel border border-hairline rounded-lg p-5">
             <StateTileMap ratings={governorRatings} onSelect={setSelectedState} selected={selectedState} />
+            {selectedState && (
+              <div className="mt-5 pt-5 border-t border-hairline">
+                <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedGov, 'Governor')} />
+              </div>
+            )}
           </div>
-          {selectedState && (
-            <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedGov, 'Governor')} />
-            </div>
-          )}
           <RaceList races={GOVERNOR_RACES} selected={selectedState} onSelect={setSelectedState} pvi={statePvi} />
         </div>
       )}
@@ -454,13 +495,12 @@ export function SplitTicket() {
               <HouseMosaic seats={HOUSE_SEATS} onSelectState={setSelectedState} selected={selectedState} />
             </div>
             <p className="text-ink-dim text-[11px] font-data mt-3">click a state's tile group to see its real precincts</p>
+            {selectedState && (
+              <div className="mt-5 pt-5 border-t border-hairline">
+                <StatePrecinctPanel stateAbbr={selectedState} />
+              </div>
+            )}
           </div>
-
-          {selectedState && (
-            <div className="bg-panel border border-hairline rounded-lg p-5">
-              <StatePrecinctPanel stateAbbr={selectedState} />
-            </div>
-          )}
         </div>
       )}
     </div>

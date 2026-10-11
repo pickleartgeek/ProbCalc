@@ -53,7 +53,10 @@ function apiUrl(wiki: string, params: Record<string, string>): string {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiGet(wiki: string, params: Record<string, string>, opts: WikiRequestOptions = {}): Promise<any> {
-  const { timeoutMs = 12_000, retries = 2, fetchImpl = fetch, signal, sleep = defaultSleep } = opts;
+  // 12s used to time out routinely on a long, heavily-templated article (the whole-page generic-ballot fallback
+  // below asks for more still) — MediaWiki's own server-side parse of a big page can take a while even when the
+  // network is fine, so this isn't a transient blip retries alone fix.
+  const { timeoutMs = 20_000, retries = 2, fetchImpl = fetch, signal, sleep = defaultSleep } = opts;
   let lastErr: WikiFetchError | null = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     const ctrl = new AbortController();
@@ -133,11 +136,19 @@ function stripHtml(s: string): string {
 const POLLING_SECTION_RE = /opinion poll|polling|poll aggregation|polls?$/i;
 const NOT_GENERAL_RE = /primary|primaries|runoff|run-off|caucus|convention|nominat|straw|endorse/i;
 
+/** Treats every dash variant (en/em dash, minus sign) as a plain hyphen, so a hint written with one survives
+ *  Wikipedia using another (and vice versa) — a real source of silent mismatches on year-range headings like "2025–2026". */
+const normalizeDashes = (s: string) => s.replace(/[‐-―−]/g, '-');
+
 /**
  * Orders candidate sections best-first. A US race page has polling sections under the primaries AND under
  * "General election"; the general-election one wins because its ancestry says so. Ancestry comes from the
  * TOC number ("6.2.1" sits under "6.2" and "6"), and MediaWiki returns a parent section together with all
  * of its subsections, so a parent scores at least as well as its children.
+ *
+ * `sectionHint` can hold several candidate phrases separated by "|" (e.g. "generic ballot|2025-2026"), matched
+ * as alternatives — useful when a page might address the same polling block by a stable parent heading OR by a
+ * year label that drifts every cycle, and either one should count as a hit.
  */
 export function rankPollingSections(sections: WikiSection[], sectionHint?: string): WikiSection[] {
   const byNumber = new Map(sections.map((s) => [s.number, s]));
@@ -147,12 +158,13 @@ export function rankPollingSections(sections: WikiSection[], sectionHint?: strin
     for (let i = parts.length - 1; i >= 1; i--) { const a = byNumber.get(parts.slice(0, i).join('.')); if (a) out.push(a); }
     return out;
   };
-  const hint = sectionHint?.toLowerCase();
+  const hints = (sectionHint ?? '').split('|').map((h) => normalizeDashes(h.trim().toLowerCase())).filter(Boolean);
   return sections
     .map((s, order) => {
       const chain = [s, ...ancestors(s)];
       let score = 0;
-      const hinted = !!hint && s.line.toLowerCase().includes(hint);
+      const line = normalizeDashes(s.line.toLowerCase());
+      const hinted = hints.some((h) => line.includes(h));
       if (hinted) score += 50; // e.g. the generic ballot's tables sit under year headings ("2025–2026"), which say nothing about polling
       if (POLLING_SECTION_RE.test(s.line)) score += 10;
       else if (!hinted) score -= 100; // not a polling heading at all
@@ -195,7 +207,10 @@ export async function fetchWikipediaPolling(
     const wikitext = await fetchWikitext(listed.title, sec.index, wiki, opts);
     if (wikitext.includes('{|')) return { wikitext, sectionTitle: sec.line, pageTitle: listed.title, wiki, resolvedFrom };
   }
-  // No obviously-named section with a table: hand back the whole page; the parser picks the best table.
-  const wikitext = await fetchWikitext(listed.title, undefined, wiki, opts);
+  // No obviously-named section with a table: hand back the whole page; the parser picks the best table. This is a
+  // much bigger payload than any single section (easily hundreds of KB on a long, actively-edited article like a
+  // year's whole-country elections page), so it gets a longer floor on top of whatever timeout the caller set —
+  // the per-section timeout above was sized for one table, not the entire article.
+  const wikitext = await fetchWikitext(listed.title, undefined, wiki, { ...opts, timeoutMs: Math.max(opts?.timeoutMs ?? 20_000, 45_000) });
   return { wikitext, sectionTitle: '(full page — no polling section found)', pageTitle: listed.title, wiki, resolvedFrom };
 }

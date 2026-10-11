@@ -4,9 +4,8 @@ import { CardMosaic } from '../components/CardMosaic';
 import { GALLERY_COUNTRIES } from '../lib/seedData';
 import { allRaceDefs, type RaceGroup } from '../lib/races/registry';
 
-const GROUP_OF: Record<string, RaceGroup> = { de: 'Germany', us: 'United States', bg: 'Bulgaria', sk: 'Slovakia', uk: 'United Kingdom' };
 const RACES = allRaceDefs();
-const raceCount = (countryId: string) => RACES.filter((r) => r.group === GROUP_OF[countryId]).length;
+const raceCount = (group: RaceGroup) => RACES.filter((r) => r.group === group).length;
 
 export function Home() {
   return (
@@ -62,7 +61,7 @@ export function Home() {
             {GALLERY_COUNTRIES.map((c) => (
               <Link
                 key={c.id}
-                to="/gallery"
+                to={`/gallery?country=${c.id}`}
                 className="relative bg-panel border border-hairline rounded-lg p-4 hover:border-hairline-bright transition overflow-hidden"
               >
                 <CardMosaic colors={c.colors} seedKey={c.id} />
@@ -70,7 +69,7 @@ export function Home() {
                   <div className="text-3xl mb-2">{c.flagEmoji}</div>
                   <div className="font-display font-700 text-base">{c.name}</div>
                   <div className="text-ink-dim text-xs font-data mt-1">
-                    {raceCount(c.id)} race{raceCount(c.id) !== 1 ? 's' : ''} · {c.system}
+                    {raceCount(c.group)} race{raceCount(c.group) !== 1 ? 's' : ''} · {c.system}
                   </div>
                 </div>
               </Link>

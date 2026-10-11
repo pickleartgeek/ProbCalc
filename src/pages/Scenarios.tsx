@@ -14,21 +14,23 @@ export function Scenarios() {
   const [upsetsOnly, setUpsetsOnly] = useState(false);
   const [page, setPage] = useState(0);
 
-  if (!config || !outcomes || !baseCalcResults) {
-    return <Navigate to="/results" replace />;
-  }
-
-  const favoriteId = [...baseCalcResults].sort((a, b) => b.percentage - a.percentage)[0]?.partyId;
-  const partyById = Object.fromEntries(config.parties.map((p) => [p.id, p]));
+  // Hooks first, guard after: the data can disappear while this page is open (loading another race clears it),
+  // and an early return above a hook makes React throw "rendered fewer hooks than expected".
+  const favoriteId = baseCalcResults ? [...baseCalcResults].sort((a, b) => b.percentage - a.percentage)[0]?.partyId : undefined;
 
   const filtered = useMemo(() => {
-    return outcomes.filter((o) => {
+    return (outcomes ?? []).filter((o) => {
       if (winnerFilter !== 'all' && o.winnerId !== winnerFilter) return false;
       if (!marginFilter.has(o.marginType)) return false;
       if (upsetsOnly && o.winnerId === favoriteId) return false;
       return true;
     });
   }, [outcomes, winnerFilter, marginFilter, upsetsOnly, favoriteId]);
+
+  if (!config || !outcomes || !baseCalcResults) {
+    return <Navigate to="/results" replace />;
+  }
+  const partyById = Object.fromEntries(config.parties.map((p) => [p.id, p]));
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);

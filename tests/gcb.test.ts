@@ -33,7 +33,11 @@ test('parses the real table shape: Dem/Rep columns, the 2025–2026 table beats 
   const parsed = parsePollData(WIKITEXT, { country: 'US' });
   assert.deepEqual(parsed.parties.map((p) => p.shortName), ['Dem', 'Rep', 'Others']);
   assert.deepEqual(parsed.parties.slice(0, 2).map((p) => p.affiliation), ['D', 'R']);
-  assert.equal(parsed.rows.filter((r) => r.fieldworkEnd && r.sampleSize).length, 46);
+  // 47, not 46: the fixture's second Reuters/Ipsos row ("| 1,166 (A) | ± 2.9% | 35% | 30% | 35% |") omits its
+  // rowspanned pollster/date cells, as Wikipedia tables do for a poll's second fieldwork wave — alignRowCells
+  // (wikitextParser.ts) now carries those forward instead of reading "1,166 (A)" as the pollster name and "35%"
+  // as the sample size, so this real, dated, sampled poll is correctly counted instead of silently dropped.
+  assert.equal(parsed.rows.filter((r) => r.fieldworkEnd && r.sampleSize).length, 47);
   assert.ok(parsed.rows.every((r) => !r.fieldworkEnd || r.fieldworkEnd >= '2026-06-01'), 'no row leaked in from the 2024–2025 table');
 });
 
@@ -46,7 +50,7 @@ test('BaseCalc caps huge trackers: without the cap four Morning Consult polls de
   };
   const raw = dLead({});
   const capped = dLead(optionsFromWeighting(configForRace(def, parsed).sim.dateWeighting)); // what the app and fetch-polls actually use
-  assert.equal(capped.polls, 46);
+  assert.equal(capped.polls, 47);
   assert.ok(capped.lead > raw.lead + 0.5, `cap moves the average towards the field (raw D+${raw.lead.toFixed(1)} → capped D+${capped.lead.toFixed(1)})`);
   assert.ok(capped.lead > 4.8 && capped.lead < 7, `lands in the range the aggregators (D+6.5–7.4) and this table's own polls support: D+${capped.lead.toFixed(1)}`);
 });
@@ -88,7 +92,7 @@ test('loader: a live fetch of the generic ballot returns the 2025–2026 section
   const r = await loadRace(def, { fetchImpl, storage: null, fetchJson: async () => { throw new Error('no fallback needed'); }, wiki: { sleep: async () => {} } });
   assert.equal(r.source, 'live');
   assert.equal(r.sectionTitle, '2025–2026');
-  assert.equal(r.parsed.rows.filter((x) => x.fieldworkEnd && x.sampleSize).length, 46);
+  assert.equal(r.parsed.rows.filter((x) => x.fieldworkEnd && x.sampleSize).length, 47);
 });
 
 test('the live margin Split Ticket reads is negative (Democrats ahead) for this table', () => {

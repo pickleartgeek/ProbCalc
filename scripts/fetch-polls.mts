@@ -69,12 +69,19 @@ async function main() {
   let updated = 0;
 
   for (const race of races) {
+    // Looked up before the fetch (not after, as this used to) so its searchQuery is available to rescue a missing
+    // title, and so a long, heavily-templated page (the generic ballot's "2026 United States elections" is the
+    // worst offender) gets a timeout sized for its real payload instead of the 12s default meant for one table.
+    const def = raceDefById(race.raceId);
     log(`${race.raceId}: fetching "${race.wikiPage}"…`);
     try {
-      const { wikitext, sectionTitle } = await fetchWikipediaPolling(race.wikiPage, race.wiki, race.sectionHint);
+      const { wikitext, sectionTitle } = await fetchWikipediaPolling(race.wikiPage, race.wiki, race.sectionHint, {
+        searchQuery: def?.searchQuery,
+        timeoutMs: 45_000,
+        retries: 3,
+      });
       // Same table-selection rules as the app: a Senate/governor race knows its nominees and poll cutoff, so the
       // head-to-head between them wins over hypothetical and "vs. generic Democrat" tables.
-      const def = raceDefById(race.raceId);
       const parsed = def ? shapeForRace(parsePollData(wikitext, parseOptionsFor(def)), def) : parsePollData(wikitext, { country: 'US' });
       if (def) assertRealCandidates(parsed, def); // a generic-only table must never feed a Senate/governor margin
 

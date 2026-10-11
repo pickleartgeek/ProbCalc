@@ -425,6 +425,14 @@ export function Build() {
               >
                 Parse table
               </button>
+              {raw && (
+                <button
+                  onClick={() => { setRaw(''); setParties([]); setParsedRows([]); setRowCount(0); setWarnings([]); setFormat('unknown'); setWikiFetchedFrom(null); }}
+                  className="px-3 py-2 border border-hairline-bright rounded text-sm text-ink-muted hover:text-ink hover:bg-panel-raised"
+                >
+                  Clear
+                </button>
+              )}
               {rowCount > 0 && (
                 <span className="text-ink-muted text-sm">
                   Found <span className="text-ink font-medium">{previewCount}</span> poll
@@ -432,6 +440,11 @@ export function Build() {
                 </span>
               )}
             </div>
+            {canParse && rowCount === 0 && (
+              <div className="mt-3 text-xs text-gold bg-gold/10 border border-gold-dim/40 rounded px-2 py-1.5" role="status">
+                No polls found in this text yet. Paste the whole table including its header row — plain copy-paste and wikitext (<span className="font-data">{'{|'}</span> … <span className="font-data">{'|}'}</span>) both work.
+              </div>
+            )}
             {warnings.length > 0 && (
               <div className="mt-3 space-y-1">
                 {warnings.map((w, i) => (
@@ -474,8 +487,12 @@ export function Build() {
                   ))}
                 </tbody>
               </table>
-              {parsedRows.length > 8 && (
-                <p className="text-ink-dim text-xs mt-2">…and {parsedRows.length - 8} more rows</p>
+              {(parsedRows.length > 8 || parties.length > 6) && (
+                <p className="text-ink-dim text-xs mt-2">
+                  {parsedRows.length > 8 && <>…and {parsedRows.length - 8} more rows</>}
+                  {parsedRows.length > 8 && parties.length > 6 && ' · '}
+                  {parties.length > 6 && <>{parties.length - 6} more part{parties.length - 6 === 1 ? 'y' : 'ies'} not shown here (all are used in the calculation)</>}
+                </p>
               )}
             </div>
           )}

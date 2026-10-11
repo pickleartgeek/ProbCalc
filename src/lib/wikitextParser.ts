@@ -74,6 +74,82 @@ export function toSampleSize(raw: string): number | null {
   return isNaN(n) || n <= 0 ? null : n;
 }
 
+/** The attribute segment of a cell ("rowspan=2 style=… | content" -> "rowspan=2 style=…"), found the same way
+ *  `lastPipeSegment` finds the content: protect templates/links from the split, then look at the FIRST "|"
+ *  rather than the last. A cell with no attributes ("51%") has no such "|" at all. */
+function cellAttrs(raw: string): string {
+  const placeholders: string[] = [];
+  const hold = (m: string) => { placeholders.push(m); return `\u0001${placeholders.length - 1}\u0001`; };
+  let protectedText = raw;
+  for (let i = 0; i < 3; i++) protectedText = protectedText.replace(/\{\{[^{}]*\}\}/g, hold);
+  protectedText = protectedText.replace(/\[\[[^[\]]*\]\]/g, hold);
+  const idx = protectedText.indexOf('|');
+  return idx === -1 ? '' : protectedText.slice(0, idx);
+}
+
+/** rowspan=N / colspan=N declared on a cell (both default to 1 when absent). */
+function cellSpan(raw: string): { rowspan: number; colspan: number } {
+  const attrs = cellAttrs(raw);
+  const rowspan = parseInt(attrs.match(/rowspan\s*=\s*"?(\d+)"?/i)?.[1] ?? '1', 10) || 1;
+  const colspan = parseInt(attrs.match(/colspan\s*=\s*"?(\d+)"?/i)?.[1] ?? '1', 10) || 1;
+  return { rowspan, colspan };
+}
+
+interface CarryCell { text: string; remaining: number; }
+
+/**
+ * Lays one data row's cells out against the table's full column width, so a row that OMITS a rowspanned cell
+ * (the normal way a Wikipedia polling table groups several versions of one poll — RV/LV, or a pollster's
+ * multiple fieldwork waves — under one shared pollster/date cell) doesn't shift every later column's value
+ * onto the wrong party. `carry` persists across the whole table (one entry per header column) and is mutated
+ * in place: a cell declaring rowspan=N "holds" its column for the next N−1 rows; a cell declaring colspan=N
+ * occupies N columns for this row (its value is kept in the first of them, the rest are left blank rather than
+ * duplicating a number into a party that didn't report one).
+ *
+ * Without this, a two-row pollster block like:
+ *   | rowspan=2 | Reuters/Ipsos | rowspan=2 | Aug 14–17 | 876 (RV) | ± 3.4% | 41% | 36% | 23% | 5%
+ *   | 1,166 (A) | ± 2.9% | 35% | 30% | 35% |
+ * reads its second row's "1,166 (A)" as the pollster name and "35%" as the sample size, and silently
+ * attributes someone else's percentage to the first party column — verified against tests/fixtures/
+ * gcb-2025-2026.wikitext, which contains exactly this pattern.
+ */
+function alignRowCells(cellsRaw: string[], width: number, carry: (CarryCell | null)[]): string[] {
+  const aligned: string[] = new Array(width).fill('');
+  let next = 0;
+  for (let col = 0; col < width; col++) {
+    const held = carry[col];
+    if (held && held.remaining > 0) {
+      aligned[col] = held.text;
+      held.remaining--;
+      if (held.remaining === 0) carry[col] = null;
+      continue;
+    }
+    const raw = cellsRaw[next];
+    if (raw === undefined) continue; // row genuinely ends early (trailing columns left blank) — nothing to carry
+    next++;
+    const { rowspan, colspan } = cellSpan(raw);
+    const span = Math.max(1, colspan);
+    for (let k = 0; k < span && col + k < width; k++) {
+      aligned[col + k] = k === 0 ? raw : '';
+      if (rowspan > 1) carry[col + k] = { text: k === 0 ? raw : '', remaining: rowspan - 1 };
+    }
+    col += span - 1; // the for-loop's own col++ advances past the rest of a colspan
+  }
+  return aligned;
+}
+
+/** Expands a header row's own colspan so the table's column width (and hence every data row's alignment)
+ *  accounts for a grouped header ("Opposition" spanning two party columns) — the label is repeated into
+ *  each slot it covers; buildPartyFromHeader already disambiguates columns that end up sharing one name. */
+function expandHeaderRow(cellsRaw: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of cellsRaw) {
+    const { colspan } = cellSpan(raw);
+    for (let k = 0; k < Math.max(1, colspan); k++) out.push(raw);
+  }
+  return out;
+}
+
 /** Splits a wikitable row's wikitext into individual cell strings. */
 function extractRowCells(rowText: string, cellPrefix: '|' | '!'): string[] {
   const cells: string[] = [];
@@ -139,7 +215,7 @@ function parseOneTable(tableText: string, ctx: TableContext = {}): TableParse {
     else break;
   }
 
-  const headerText = extractRowCells(blocks[headerBlockIndex], '!').map((c) => stripWikiMarkup(lastPipeSegment(c)));
+  const headerText = expandHeaderRow(extractRowCells(blocks[headerBlockIndex], '!')).map((c) => stripWikiMarkup(lastPipeSegment(c)));
   const colRoles: ColumnRole[] = [];
   const partyDefs: { colIndex: number; header: string; isOthers: boolean }[] = [];
   headerText.forEach((h, i) => {
@@ -167,11 +243,15 @@ function parseOneTable(tableText: string, ctx: TableContext = {}): TableParse {
   });
 
   const rows: PollRow[] = [];
+  const carry: (CarryCell | null)[] = new Array(headerText.length).fill(null);
   for (let bi = dataStartIndex; bi < blocks.length; bi++) {
     const block = blocks[bi];
     if (!block || block.startsWith('}')) continue;
-    const cellsRaw = extractRowCells(block, '|');
-    if (cellsRaw.length === 0) continue;
+    const cellsRaw0 = extractRowCells(block, '|');
+    if (cellsRaw0.length === 0) continue;
+    // Re-aligned against the full header width: a row that omits a rowspanned pollster/date cell (grouping two
+    // fieldwork waves of the same poll) must not shift every later column onto the wrong party — see alignRowCells.
+    const cellsRaw = alignRowCells(cellsRaw0, headerText.length, carry);
 
     let firm = '';
     let dateRaw = '';

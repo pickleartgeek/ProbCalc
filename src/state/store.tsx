@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { BaseCalcResult, ElectionConfig, ParsedPollData, ProbCalcResult, SimulationOutcome } from '../lib/types';
 import { computeBaseCalc, computeBaseCalcTimeline, computePollWeights, optionsFromWeighting, type PollWeight, type TimelinePoint } from '../lib/baseCalc';
 
@@ -48,6 +48,21 @@ const initialState: EngineState = {
   candidatePortraits: {},
 };
 
+const STORAGE_KEY = 'probcalc.engine.v1';
+
+/** The race the user built or loaded survives a refresh. Simulations and portraits are not persisted (large, cheap to regenerate). */
+function loadInitial(): EngineState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return initialState;
+    const saved = JSON.parse(raw) as Partial<EngineState>;
+    if (!saved.config || !saved.pollData || !Array.isArray(saved.pollData.rows)) return initialState;
+    return { ...initialState, config: saved.config, pollData: saved.pollData, viewMode: saved.viewMode === 'prob' ? 'prob' : 'base' };
+  } catch {
+    return initialState;
+  }
+}
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export function computeBaseCalcBundle(config: ElectionConfig, pollData: ParsedPollData, today = todayIso()): BaseCalcBundle {
@@ -63,7 +78,14 @@ export function computeBaseCalcBundle(config: ElectionConfig, pollData: ParsedPo
 }
 
 export function EngineProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<EngineState>(initialState);
+  const [state, setState] = useState<EngineState>(loadInitial);
+
+  useEffect(() => {
+    try {
+      if (state.config && state.pollData) localStorage.setItem(STORAGE_KEY, JSON.stringify({ config: state.config, pollData: state.pollData, viewMode: state.viewMode }));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch { /* storage full or blocked — persistence is best-effort */ }
+  }, [state.config, state.pollData, state.viewMode]);
 
   const baseCalc = useMemo(
     () => (state.config && state.pollData ? computeBaseCalcBundle(state.config, state.pollData) : null),

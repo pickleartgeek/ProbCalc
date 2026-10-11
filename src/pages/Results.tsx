@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ShareLinkButton } from '../components/ShareLinkButton';
 import { useGeoScene } from '../hooks/useGeoScene';
 import { Link, Navigate } from 'react-router-dom';
 import { useEngine } from '../state/store';
@@ -37,7 +38,10 @@ export function Results() {
           <p className="text-ink-dim text-xs font-data uppercase tracking-wide">{config.region || 'Untitled region'} · {config.votingSystem}</p>
           <h1 className="font-display font-800 text-3xl">{config.title}</h1>
         </div>
-        <ViewToggle />
+        <div className="flex flex-col items-end gap-2">
+          <ViewToggle />
+          <ShareLinkButton config={config} pollData={pollData} />
+        </div>
       </div>
 
       {leaderParty && (

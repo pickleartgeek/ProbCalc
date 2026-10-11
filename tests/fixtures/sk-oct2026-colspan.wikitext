@@ -1,0 +1,60 @@
+{{sticky header}}
+{|class="wikitable sortable nowrap sticky-header-multi mw-datatable" style="text-align:center; font-size:92%; line-height:14px;"
+|- style="font-size:91%";
+!rowspan="3"|Polling firm
+!style="width:100px;" data-sort-type="date"; rowspan="3"|Date
+!class="unsortable" rowspan="3"|Sample<br/>size
+!class="unsortable" rowspan="2"|[[Direction – Social Democracy|Smer]]
+!class="unsortable" rowspan="2"|[[Progressive Slovakia|PS]]
+! rowspan="2" class="unsortable" |[[Voice – Social Democracy|Hlas]]
+!class="unsortable" colspan="3"|[[OĽaNO and Friends]]
+!class="unsortable" rowspan="2"|[[Christian Democratic Movement|KDH]]
+!class="unsortable" rowspan="2"|[[Freedom and Solidarity|SaS]]
+!class="unsortable" rowspan="2"|[[Slovak National Party|SNS]]
+!class="unsortable" rowspan="2" style="letter-spacing: -1px;"|[[Republic (Slovakia)|Republika]]
+!class="unsortable" rowspan="2" style="letter-spacing: -1px;"|[[Hungarian Alliance (Slovak political party)|Hungarian<br>Alliance]]
+!class="unsortable" rowspan="2" style="letter-spacing: -1px;"|[[Democrats (Slovakia)|Democrats]]
+!class="unsortable" rowspan="2"|[[We Are Family (Slovakia)|We Are<br/>Family]]
+!class="unsortable" rowspan="2"|[[People's Party Our Slovakia|ĽSNS]]
+!class="unsortable" style="width:20px;" rowspan="3"|Others
+!class="unsortable" style="width:20px;" rowspan="3"|Lead
+|- style="font-size:90%";
+!class="unsortable"|[[Slovakia (political party)|Slovakia]]
+!class="unsortable"|[[For the People (Slovakia)|ZĽ]]
+!class="unsortable"|[[Christian Union (Slovakia)|KÚ]]
+|-
+!style="background:{{party color|Direction – Social Democracy}}; width:40px;"|
+!style="background:{{party color|Progressive Slovakia (2021)}}; width:40px;"|
+!style="background:{{party color|Voice – Social Democracy}}; width:40px;"|
+!style="background:{{party color|Slovakia (political movement)}}; width:40px;"|
+!style="background:{{party color|For the People (Slovakia)}}; width:40px;"|
+!style="background:{{party color|Christian Union (Slovakia)}}; width:40px;"|
+!style="background:{{party color|Christian Democratic Movement}}; width:40px;"|
+!style="background:{{party color|Freedom and Solidarity (2023)}}; width:40px;"|
+!style="background:{{party color|Slovak National Party}}; width:40px;"|
+!style="background:{{party color|Republic (Slovakia)}}; width:40px;"|
+!style="background:{{party color|Alliance (Slovak political party)}}; width:40px;"|
+!style="background:{{party color|Democrats (Slovakia)}}; width:40px;"|
+!style="background:{{party color|We Are Family (Slovakia)}}; width:40px;"|
+!style="background:{{party color|Kotleba – People's Party Our Slovakia}}; width:40px;"|
+|-
+|[https://www.sme.sk/domov/c/prieskum-politickych-stran-nms-oktober-2026 NMS]
+|1–5 Oct 2026
+|1,005
+|17.8
+|style="background:#98e4ff;"|'''19.5'''
+|5.9
+|9.0
+|1.9
+|0.6
+|6.2
+|8.0
+|1.5
+|14.2
+|3.3
+|4.9
+|3.1
+|0.9
+|2.8
+|style="background:{{party color|Progressive Slovakia}}; color:white;"|'''1.7'''
+|}
