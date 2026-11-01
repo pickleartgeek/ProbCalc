@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "tsx --test tests/*.test.ts",
-    "regions:local": "node scripts/prepare-germany.mjs .cache/regions/btw25_kerg.csv .cache/regions/wahlkreise public/data/geo && node scripts/prepare-slovakia.mjs .cache/regions/NRSR2023_SK_tab08d.xlsx .cache/regions/obec public/data/geo"
+    "regions:local": "node scripts/prepare-germany.mjs .cache/regions/btw25_kerg.csv .cache/regions/wahlkreise public/data/geo && node scripts/prepare-slovakia.mjs .cache/regions/NRSR2023_SK_tab08d.xlsx .cache/regions/obec public/data/geo && node scripts/prepare-uk.mjs .cache/regions/HoC-GE2024-results-by-constituency.1.xlsx .cache/regions/uk-boundaries.zip public/data/geo"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -45,6 +45,8 @@
     "playwright": "^1.62.1",
     "proj4": "^2.22.0",
     "read-excel-file": "^9.3.10",
+    "topojson-server": "^3.0.1",
+    "topojson-simplify": "^3.0.3",
     "tsx": "^4.23.12",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"

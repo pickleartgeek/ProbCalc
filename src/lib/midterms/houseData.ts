@@ -1,16 +1,17 @@
 import type { HouseSeat } from './types';
 import { HOUSE_APPORTIONMENT, STATE_NAMES, STATE_PVI_2024_FALLBACK, PREVIOUS_GCB_R_MARGIN, DEFAULT_CURRENT_GCB_R_MARGIN } from './stateGrid';
 import { ratingFromRProb } from './ratings';
+import { HOUSE_STRENGTH, winProbR } from './raceProb';
 import { mulberry32, seedFrom } from '../mosaicUtil';
 import { applyEnvironmentShiftMargin } from '../environmentShift';
+import districtPres from '../../data/house-pres-2024.json';
 
-// There is no real per-district data here — no district-level 2024 result feed
-// is wired in — so each district's "previous result" is its state's REAL 2024
-// presidential margin (from precinctAnchor.ts, aggregated off 163,925 actual
-// precincts — falls back to an approximate constant only for AK, which the
-// precinct set doesn't cover) plus a seeded within-state spread (districts
-// within a state aren't all identical). PLACEHOLDER for the within-state
-// spread only; the state anchor and the GCB shift itself are both real now.
+/** Real 2024 presidential margin (R − D, points) per district, keyed "GA-5" (at-large "AK-0"). Source: The Downballot via jaytimm/PresElectionResults; 435 rows minus NY-21 (blank in source). Lines are the 119th-Congress maps — NOT any 2025–26 mid-decade redistricting. */
+const REAL_DISTRICT_MARGINS = districtPres as Record<string, number>;
+
+// Each district's "previous result" is its REAL 2024 presidential margin
+// (house-pres-2024.json). Only a district missing from that file (NY-21) falls
+// back to its state's margin plus a seeded within-state spread.
 //
 // The actual prediction is the guide's III.II extrapolation (environmentShift.ts)
 // applied at full weight (1.0): House districts get essentially no independent
@@ -25,10 +26,10 @@ function generateOne(
   stateMargins: Record<string, number>
 ): HouseSeat {
   const stateMargin = stateMargins[stateAbbr] ?? STATE_PVI_2024_FALLBACK[stateAbbr] ?? 0;
-  // Districts within a state spread out around the state's average lean —
-  // this within-state spread is the one genuinely synthetic piece.
+  // Real district result where we have it; otherwise the state lean plus a seeded spread. The draw is always consumed so
+  // the fallback for one district never depends on whether its neighbours had real data.
   const spread = (rand() + rand() + rand() - 1.5) * 14; // ~triangular, mean 0, points
-  const districtPrevMargin = stateMargin + spread;
+  const districtPrevMargin = REAL_DISTRICT_MARGINS[`${stateAbbr}-${district}`] ?? stateMargin + spread;
 
   const shiftedMargin = applyEnvironmentShiftMargin(
     districtPrevMargin,
@@ -36,7 +37,7 @@ function generateOne(
     currentGcbRMargin,
     1 // House: full uniform swing, no independent race-level polling to lean on
   );
-  const pR = Math.min(0.99, Math.max(0.01, 0.5 + shiftedMargin / 100));
+  const pR = winProbR(shiftedMargin, HOUSE_STRENGTH); // ProbCalc's own probability for this margin (see raceProb.ts)
 
   return {
     id: `hd-${stateAbbr.toLowerCase()}-${district}`,
@@ -44,6 +45,9 @@ function generateOne(
     stateName: STATE_NAMES[stateAbbr],
     district,
     rating: ratingFromRProb(pR),
+    margin: shiftedMargin,
+    pR,
+    strength: HOUSE_STRENGTH,
   };
 }
 
@@ -80,7 +84,7 @@ export function houseDistrictPrevMargins(stateMargins: Record<string, number> = 
     const rand = mulberry32(seedFrom(`house-${abbr}-2026`));
     const stateMargin = stateMargins[abbr] ?? STATE_PVI_2024_FALLBACK[abbr] ?? 0;
     const ds = count === 1 ? [0] : Array.from({ length: count }, (_, i) => i + 1);
-    for (const d of ds) out[`${abbr}-${d}`] = stateMargin + (rand() + rand() + rand() - 1.5) * 14;
+    for (const d of ds) { const fb = stateMargin + (rand() + rand() + rand() - 1.5) * 14; out[`${abbr}-${d}`] = REAL_DISTRICT_MARGINS[`${abbr}-${d}`] ?? fb; }
   }
   return out;
 }

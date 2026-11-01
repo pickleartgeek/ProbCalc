@@ -8,7 +8,7 @@ import { buildReturnsPlan, isTwoPartyBaseline, shiftDisplay, swingRows, unitsFro
 import { encodeLeader, makeLeaderScale } from '../../lib/geo/forecast';
 import { onDark } from '../../lib/partyColors';
 import { PrecinctCanvas } from '../precinct/PrecinctCanvas';
-import { prettyPrecinctId } from '../precinct/PrecinctTooltip';
+import { prettyPrecinctId } from '../../lib/precinct/prettyId';
 import { USPrecinctMap } from '../USPrecinctMap';
 import { PlaceholderMap } from '../PlaceholderMap';
 import { GeoMap } from '../geo/GeoMap';

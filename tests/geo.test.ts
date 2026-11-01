@@ -14,7 +14,7 @@ const fetchJson = async (url: string) => JSON.parse(fs.readFileSync(path.join('p
 const party = (id: string, name = id, extra: Partial<Party> = {}): Party => ({ id, name, shortName: name, color: '#888', ...extra });
 
 test('every preset loads with normalised { id, name } features and the right unit counts', async () => {
-  const expected: Record<string, number> = { 'de-wahlkreise': 299, 'sk-obce': 2927, 'us-house': 435, 'bg-provinces': 28 };
+  const expected: Record<string, number> = { 'de-wahlkreise': 299, 'sk-obce': 2927, 'us-house': 435, 'bg-provinces': 28, 'uk-constituencies': 650 };
   for (const [id, n] of Object.entries(expected)) {
     const g = await loadGeometry(id, fetchJson);
     assert.equal(g.features.length, n, id);
@@ -198,12 +198,12 @@ test('a single-state race leans districts against the STATE, not the country', a
   const g = await loadGeometry('us-house', fetchJson);
   const parties = [party('d', 'Ossoff (D)', { affiliation: 'D' }), party('r', 'Collins (R)', { affiliation: 'R' }), party('others', 'Others')];
   const map = matchPartiesToBaseline(parties, b.keys);
-  const ga = g.features.filter((f) => f.properties.group === 'GA').map((f) => f.properties);
+  const ga = g.features.filter((f) => f.properties.group === 'AL').map((f) => f.properties);
   const { units, prevNational } = unitsFromBaseline(ga, b, map);
   const mean = units.reduce((a, u) => a + u.prev!.d * u.votes, 0) / units.reduce((a, u) => a + u.votes, 0);
   assert.ok(Math.abs(prevNational.d! - mean) < 1e-9, 'reference = the participating districts\' own weighted mean');
   const usMean = b.national.D;
-  assert.ok(Math.abs(prevNational.d! - usMean) > 0.005, 'and it differs from the national figure, which is what would have double-counted Georgia\'s own lean');
+  assert.ok(Math.abs(prevNational.d! - usMean) > 0.005, 'and it differs from the national figure, which is what would have double-counted Alabama\'s own lean');
 });
 
 test('two-party baselines are compared like-for-like: poll undecideds do not show up as a phantom shift', () => {
@@ -223,4 +223,18 @@ test('tooltip rows: two-party baselines compare D and R as a share of the pair; 
   assert.equal(rows.others.before, undefined);
   const plain = shiftDisplay(['a', 'b'], { a: 0.3, b: 0.7 }, { a: 0.2, b: 0.8 }, { a: 'x', b: 'y' }, false);
   assert.ok(Math.abs(plain.a.delta! - 10) < 1e-9);
+});
+
+test('UK preset: 650 constituencies whose GE2024 baseline matches the official result', async () => {
+  const b = await loadBaseline('uk-constituencies', fetchJson);
+  const g = await loadGeometry('uk-constituencies', fetchJson);
+  assert.equal(b.kind, 'measured');
+  assert.equal(Object.keys(b.regions).length, 650);
+  assert.ok(g.features.every((f) => b.regions[f.properties.id]), 'every shape has results');
+  const n = b.national;
+  assert.ok(Math.abs(n.lab - 0.337) < 0.002 && Math.abs(n.con - 0.237) < 0.002 && Math.abs(n.reform - 0.143) < 0.002, 'national shares: Lab 33.7, Con 23.7, Reform 14.3');
+  assert.equal(inferPreset('United Kingdom'), 'uk-constituencies');
+  const ps = [party('lab', 'Labour'), party('con', 'Conservatives'), party('reform', 'Reform UK'), party('ld', 'Liberal Democrats'), party('grn', 'Green Party', { shortName: 'Greens' }), party('others', 'Others')];
+  const m = matchPartiesToBaseline(ps, b.keys);
+  assert.deepEqual([m.lab, m.con, m.reform, m.ld, m.grn], ['lab', 'con', 'reform', 'ld', 'green']);
 });

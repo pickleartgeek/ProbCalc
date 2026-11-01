@@ -33,6 +33,9 @@ function computeFromManifest(manifest: ManifestEntry[]): RealStatePVI {
 
   for (const m of manifest) {
     if (m.votes_dem == null || m.votes_rep == null || !m.votes_total) continue;
+    // A state whose D+R votes are a small part of its total vote is a bad precinct set (NE has no party columns at all;
+    // VT/OR are partial or duplicated), and its margin would be nonsense — keep the hand-set constant for those.
+    if ((m.votes_dem + m.votes_rep) / m.votes_total < 0.85) continue;
     margins[m.state] = ((m.votes_rep - m.votes_dem) / m.votes_total) * 100;
     realStates.add(m.state);
     precinctCount += m.precincts ?? 0;

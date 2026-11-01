@@ -14,7 +14,7 @@ export interface RegionBaseline {
   kind: 'measured' | 'modelled' | 'none';
   source: string;
   keys: { key: string; label: string }[];
-  regions: Record<string, { votes: number; shares: Record<string, number> }>;
+  regions: Record<string, { votes: number; shares: Record<string, number>; /** baseline key of the party that won the region, where the file records it (UK) */ winner?: string }>;
   /** vote-weighted national share per key */
   national: Record<string, number>;
 }
@@ -38,7 +38,7 @@ export const emptyBaseline = (presetId: string): RegionBaseline => ({
 interface RawBaselineFile {
   election: string;
   parties: { key: string; label: string }[];
-  regions: Record<string, { n: string; g: string; v: number; r: number[] }>;
+  regions: Record<string, { n: string; g: string; v: number; r: number[]; w?: string }>;
 }
 
 export function baselineFromFile(presetId: string, raw: RawBaselineFile): RegionBaseline {
@@ -46,7 +46,7 @@ export function baselineFromFile(presetId: string, raw: RawBaselineFile): Region
   for (const [id, r] of Object.entries(raw.regions)) {
     const shares: Record<string, number> = {};
     raw.parties.forEach((p, i) => (shares[p.key] = r.v > 0 ? (r.r[i] ?? 0) / r.v : 0));
-    regions[id] = { votes: r.v, shares };
+    regions[id] = { votes: r.v, shares, ...(r.w ? { winner: r.w } : {}) };
   }
   return { presetId, kind: 'measured', source: raw.election, keys: raw.parties, regions, national: nationalFrom(regions, raw.parties) };
 }

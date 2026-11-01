@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { computeSenateRaces } from '../lib/midterms/senateData';
 import { computeGovernorRaces } from '../lib/midterms/governorData';
@@ -8,14 +9,21 @@ import { RATING_ORDER, RATING_LABEL, RATING_COLOR } from '../lib/midterms/rating
 import { PREVIOUS_GCB_R_MARGIN, DEFAULT_CURRENT_GCB_R_MARGIN, STATE_PVI_2024_FALLBACK } from '../lib/midterms/stateGrid';
 import { loadRealStatePVI } from '../lib/midterms/precinctAnchor';
 import { loadSenatePrecinctAnchor, type SenatePrecinctAnchor } from '../lib/midterms/senatePrecinctAnchor';
-import { loadLivePolls, type LivePollEntry } from '../lib/midterms/livePollData';
+import { loadLivePolls, liveEntryFromLoad, type LivePollEntry } from '../lib/midterms/livePollData';
+import { loadRace } from '../lib/races/loader';
 import { recordGcbSnapshot, recordRaceMargins, getGcbHistory } from '../lib/midterms/gcbHistory';
-import { StateTileMap } from '../components/midterms/StateTileMap';
+import { StateMap, type StateMapRace } from '../components/midterms/StateMap';
+import { StatePrecinctPanel } from '../components/precinct/StatePrecinctPanel';
+import { MapViewToggle } from '../components/midterms/MapViewToggle';
+import { isMapView, type MapView } from '../lib/midterms/mapViews';
+import { racesToCsv, downloadCsv } from '../lib/midterms/exportCsv';
+import { SeatDistribution, RaceLadder, ControlCurve, type LadderRace } from '../components/midterms/LikelihoodCharts';
+import { controlCurve, type ControlCurvePoint } from '../lib/midterms/envCurve';
+import { NATIONAL_SD, UNPOLLED_ENV_WEIGHT } from '../lib/midterms/raceProb';
 import { HouseMosaic } from '../components/midterms/HouseMosaic';
 import { ControlGauge } from '../components/midterms/ControlGauge';
 import { RaceList } from '../components/midterms/RaceList';
 import { RatingBadge } from '../components/midterms/RatingBadge';
-import { StatePrecinctPanel } from '../components/precinct/StatePrecinctPanel';
 import { RaceCardActions } from '../components/races/RaceTrend';
 import { midtermRaceDef, raceDefById } from '../lib/races/registry';
 import type { SenateRace, GovernorRace } from '../lib/midterms/types';
@@ -38,7 +46,7 @@ function favoredLine(chamber: string, pRControl: number, pDControl: number): str
   const favored = pRControl >= pDControl ? 'Republicans' : 'Democrats';
   const pct = Math.round(Math.max(pRControl, pDControl) * 100);
   if (pct < 55) return `${chamber} is a toss-up (${favored} lead narrowly, ${pct}%)`;
-  return `${favored} favored to win the ${chamber} (${pct}%)`;
+  return `${favored} favored to win ${chamber} (${pct}%)`;
 }
 
 /** A collapsed-by-default explanation, for the methodology paragraph and the session-exploration chart — both are
@@ -57,7 +65,7 @@ function Disclosure({ summary, children, defaultOpen = false }: { summary: React
   );
 }
 
-/** What StatePrecinctPanel needs to swing the state's real 2024 precincts to this specific race's computed margin. */
+/** What StatePrecinctPanel needs to swing the state's real 2024 results to this specific race's computed margin. */
 function raceSimulate(race: (SenateRace | GovernorRace) | null | undefined, kind: 'Senate' | 'Governor') {
   if (!race || race.computedMargin === undefined) return null;
   const label = race.demCandidate || race.repCandidate ? `${race.demCandidate ?? 'Dem'} (D) vs ${race.repCandidate ?? 'Rep'} (R)` : `${kind} race`;
@@ -109,12 +117,41 @@ function RaceWindow({ race, kind, livePolls }: { race: SenateRace | GovernorRace
 const GCB_DEF = raceDefById('gcb-2026');
 
 export function SplitTicket() {
-  const [tab, setTab] = useState<Tab>('overview');
-  const [selectedState, setSelectedState] = useState<string | null>(null);
-  const [currentGcb, setCurrentGcb] = useState(DEFAULT_CURRENT_GCB_R_MARGIN);
+  // Shareable state: ?tab=senate&view=margin&gcb=-3.5&state=GA live in the URL (after the # — HashRouter) and are read once on
+  // load, then kept in sync with `replace` so the back button isn't flooded. Anything absent or invalid falls back to the default.
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => { const t = params.get('tab'); return TABS.some((x) => x.key === t) ? (t as Tab) : 'overview'; });
+  const [selectedState, setSelectedState] = useState<string | null>(() => { const st = params.get('state')?.toUpperCase(); return st && st in STATE_PVI_2024_FALLBACK ? st : null; });
+  // What the state maps are coloured by (rating / margin / win probability). Remembered in this browser; one choice drives every map on the page.
+  const [mapView, setMapViewState] = useState<MapView>(() => {
+    const q = params.get('view');
+    if (isMapView(q)) return q;
+    try { const v = localStorage.getItem('probcalc:mapview'); return isMapView(v) ? v : 'rating'; } catch { return 'rating'; }
+  });
+  const setMapView = (v: MapView) => {
+    setMapViewState(v);
+    try { localStorage.setItem('probcalc:mapview', v); } catch { /* storage unavailable */ }
+  };
+  const urlGcb = parseFloat(params.get('gcb') ?? '');
+  const hasUrlGcb = Number.isFinite(urlGcb) && Math.abs(urlGcb) <= 30;
+  const [currentGcb, setCurrentGcb] = useState(hasUrlGcb ? urlGcb : DEFAULT_CURRENT_GCB_R_MARGIN);
   // Until the reader moves the slider themselves, it follows the live generic-ballot average (the 'gcb-2026' race: fetched
   // and modelled by BaseCalc like every other race). The constant above is only the fallback before the first fetch lands.
-  const [gcbTouched, setGcbTouched] = useState(false);
+  const [gcbTouched, setGcbTouched] = useState(hasUrlGcb); // a shared link pins the slider where the sender left it
+
+  // Write the shareable state back to the URL: gcb only once the reader has set it (otherwise it just follows the live average),
+  // debounced so dragging the slider is one history-neutral update, not hundreds.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const next = new URLSearchParams();
+      if (tab !== 'overview') next.set('tab', tab);
+      if (mapView !== 'rating') next.set('view', mapView);
+      if (gcbTouched) next.set('gcb', currentGcb.toFixed(1));
+      if (selectedState) next.set('state', selectedState);
+      if (next.toString() !== params.toString()) setParams(next, { replace: true });
+    }, 250);
+    return () => clearTimeout(id);
+  }, [tab, mapView, gcbTouched, currentGcb, selectedState, params, setParams]);
 
   // Real 2024 presidential margins, aggregated off the actual 163,925-precinct
   // set (same manifest.json the Results page's US precinct map reads). Starts
@@ -147,8 +184,19 @@ export function SplitTicket() {
     });
     loadLivePolls().then((polls) => {
       if (cancelled) return;
-      setLivePolls(polls);
+      // functional update: the generic-ballot load below may land first and must not be clobbered
+      setLivePolls((prev) => ({ ...polls, ...(prev['gcb-2026'] ? { 'gcb-2026': prev['gcb-2026'] } : {}) }));
     });
+    // The generic ballot also goes through the same live -> browser cache -> bundled fallback loader its own card uses, so the
+    // hero number agrees with that card and still works where no CI-written public/data/polls file exists (dev, first deploy,
+    // or a day the scheduled fetch failed). A real load beats the static file; a seed/empty load leaves the static file alone.
+    if (GCB_DEF) {
+      loadRace(GCB_DEF).then((load) => {
+        if (cancelled) return;
+        const entry = liveEntryFromLoad(load, GCB_DEF);
+        if (entry) setLivePolls((prev) => ({ ...prev, 'gcb-2026': entry }));
+      });
+    }
     return () => {
       cancelled = true;
     };
@@ -161,8 +209,8 @@ export function SplitTicket() {
 
   // Every race in every chamber runs through the same environment-shift model
   // (guide III.II, generalized) — House at full weight since it has no
-  // independent polling, Senate/Governors at a light weight since those are
-  // individually polled and the shift is just a nudge on top of that. The
+  // independent polling; Senate/Governors at UNPOLLED_ENV_WEIGHT (0.6) when
+  // they have no poll of their own, and only a nudge (≤0.1) when they do. The
   // House's state-level anchor (statePvi) is now the real precinct-derived
   // margin rather than an approximation.
   const liveMarginsById = useMemo(
@@ -170,13 +218,18 @@ export function SplitTicket() {
     [livePolls]
   );
 
+  const liveStrengthsById = useMemo(
+    () => Object.fromEntries(Object.entries(livePolls).filter(([, e]) => e.strength !== undefined).map(([id, e]) => [id, e.strength as number])),
+    [livePolls]
+  );
+
   const SENATE_RACES = useMemo(
-    () => computeSenateRaces(currentGcb, 0.25, senateAnchor?.baselineSenateMargins, liveMarginsById),
-    [currentGcb, senateAnchor, liveMarginsById]
+    () => computeSenateRaces(currentGcb, UNPOLLED_ENV_WEIGHT, senateAnchor?.baselineSenateMargins, liveMarginsById, liveStrengthsById),
+    [currentGcb, senateAnchor, liveMarginsById, liveStrengthsById]
   );
   const GOVERNOR_RACES = useMemo(
-    () => computeGovernorRaces(currentGcb, 0.25, liveMarginsById),
-    [currentGcb, liveMarginsById]
+    () => computeGovernorRaces(currentGcb, UNPOLLED_ENV_WEIGHT, liveMarginsById, liveStrengthsById),
+    [currentGcb, liveMarginsById, liveStrengthsById]
   );
   const HOUSE_SEATS = useMemo(() => generateHouseSeats(currentGcb, statePvi), [currentGcb, statePvi]);
 
@@ -190,17 +243,47 @@ export function SplitTicket() {
     return { total: all.length, live, hand, anchored: all.length - live - hand };
   }, [SENATE_RACES, GOVERNOR_RACES, livePolls]);
 
-  const senateSim = useMemo(() => simulateChamber(SENATE_RACES, SENATE_BASELINE, 'senate-2026'), [SENATE_RACES]);
-  const governorSim = useMemo(() => simulateChamber(GOVERNOR_RACES, GOVERNOR_BASELINE, 'governors-2026'), [GOVERNOR_RACES]);
-  const houseSim = useMemo(() => simulateChamber(HOUSE_SEATS, HOUSE_BASELINE, 'house-2026'), [HOUSE_SEATS]);
+  const senateSim = useMemo(() => simulateChamber(SENATE_RACES, SENATE_BASELINE, 'senate-2026', 8000, { nationalSd: NATIONAL_SD }), [SENATE_RACES]);
+  const governorSim = useMemo(() => simulateChamber(GOVERNOR_RACES, GOVERNOR_BASELINE, 'governors-2026', 8000, { nationalSd: NATIONAL_SD }), [GOVERNOR_RACES]);
+  const houseSim = useMemo(() => simulateChamber(HOUSE_SEATS, HOUSE_BASELINE, 'house-2026', 8000, { nationalSd: NATIONAL_SD }), [HOUSE_SEATS]);
 
-  const senateRatings = useMemo(
-    () => Object.fromEntries(SENATE_RACES.map((r) => [r.stateAbbr, r.rating])),
-    [SENATE_RACES]
+  // Race ladders: every race with the share of simulations each side won it.
+  const ladder = (races: (typeof SENATE_RACES)[number][] | (typeof GOVERNOR_RACES)[number][], sim: typeof senateSim): LadderRace[] =>
+    races.map((r, i) => ({
+      key: r.id,
+      label: `${r.stateName}${'special' in r && r.special ? ' (sp.)' : ''}`,
+      detail: `${r.demCandidate ?? 'Democrat'} vs ${r.repCandidate ?? 'Republican'}`,
+      pR: sim.raceRWins[i] / sim.iterations,
+    }));
+  const senateLadder = useMemo(() => ladder(SENATE_RACES, senateSim), [SENATE_RACES, senateSim]); // eslint-disable-line react-hooks/exhaustive-deps
+  const governorLadder = useMemo(() => ladder(GOVERNOR_RACES, governorSim), [GOVERNOR_RACES, governorSim]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "What if the national mood moves?" — the three chamber simulations re-run across a range of generic-ballot values.
+  // Independent of the slider (the slider only places the marker), so it is computed once the real anchors have loaded.
+  // Computed after a short pause so the several data loads that land at page start (anchors, polls, precincts) trigger
+  // one computation rather than one each, and so it never delays the first paint.
+  const [envCurve, setEnvCurve] = useState<ControlCurvePoint[]>([]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setEnvCurve(controlCurve({
+        gcbs: Array.from({ length: 19 }, (_, i) => -12 + i),
+        senate: (g) => computeSenateRaces(g, UNPOLLED_ENV_WEIGHT, senateAnchor?.baselineSenateMargins, liveMarginsById, liveStrengthsById),
+        governors: (g) => computeGovernorRaces(g, UNPOLLED_ENV_WEIGHT, liveMarginsById, liveStrengthsById),
+        house: (g) => generateHouseSeats(g, statePvi),
+        nationalSd: NATIONAL_SD,
+      }));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [senateAnchor, liveMarginsById, liveStrengthsById, statePvi]);
+
+  // What the map tooltip shows: each race's rating plus how many of the chamber simulation's iterations each side won it.
+  const senateMapRaces = useMemo<StateMapRace[]>(
+    () => SENATE_RACES.map((r, i) => ({ abbr: r.stateAbbr, kind: 'Senate', special: r.special, rating: r.rating, iterations: senateSim.iterations, rWins: senateSim.raceRWins[i], margin: r.computedMargin, incumbentParty: r.incumbentParty, incumbentName: r.incumbentName, demCandidate: r.demCandidate, repCandidate: r.repCandidate })),
+    [SENATE_RACES, senateSim]
   );
-  const governorRatings = useMemo(
-    () => Object.fromEntries(GOVERNOR_RACES.map((r) => [r.stateAbbr, r.rating])),
-    [GOVERNOR_RACES]
+  const governorMapRaces = useMemo<StateMapRace[]>(
+    () => GOVERNOR_RACES.map((r, i) => ({ abbr: r.stateAbbr, kind: 'Governor', rating: r.rating, iterations: governorSim.iterations, rWins: governorSim.raceRWins[i], margin: r.computedMargin, incumbentParty: r.incumbentParty, incumbentName: r.incumbentName, demCandidate: r.demCandidate, repCandidate: r.repCandidate })),
+    [GOVERNOR_RACES, governorSim]
   );
 
   const houseCounts = useMemo(() => {
@@ -374,8 +457,17 @@ export function SplitTicket() {
           ) : (
             ' (loading…)'
           )}
-          . Click any race for its live BaseCalc trend and a simulated 2026 precinct map (real 2024 precincts,
+          . Click any race for its live BaseCalc trend and a simulated 2026 county map (real 2024 results,
           uniformly swung to the computed margin).
+        </div>
+        <div className="bg-panel border border-hairline rounded-lg px-4 py-3 text-xs text-ink-muted mb-2">
+          <span className="text-ink">How the odds are computed.</span> Each race's chance is ProbCalc's own: the two candidates'
+          BaseCalc alphas set a Gamma draw each, the larger share wins, and — for two candidates — that is exactly a Beta
+          distribution, so the probability is evaluated directly rather than sampled. A race with a live polling average
+          uses that average's real alphas (capped, so a flurry of last-minute polls can't make it look certain); a race without
+          one gets a fixed prior strength (about ±7 points for statewide races, ±10 for House districts) and takes on {Math.round(UNPOLLED_ENV_WEIGHT * 100)}% of the national generic-ballot movement since 2024 (polled races only a nudge, since their polls already reflect it). House districts start from their real 2024 presidential result and take the full movement. The chamber odds
+          then simulate every race {senateSim.iterations.toLocaleString()} times, with one shared national swing per simulation
+          (±2 points) so errors are correlated, not independent.
         </div>
       </Disclosure>
       <div className="mb-8" />
@@ -410,21 +502,29 @@ export function SplitTicket() {
               <ControlGauge title="Governors" sim={governorSim} baseline={GOVERNOR_BASELINE} />
               <ControlGauge title="House" sim={houseSim} baseline={HOUSE_BASELINE} />
             </div>
+            <div className="grid md:grid-cols-3 gap-5 mt-5">
+              <SeatDistribution title="Senate" sim={senateSim} baseline={SENATE_BASELINE} />
+              <SeatDistribution title="Governors" sim={governorSim} baseline={GOVERNOR_BASELINE} />
+              <SeatDistribution title="House" sim={houseSim} baseline={HOUSE_BASELINE} />
+            </div>
           </div>
+
+          <ControlCurve points={envCurve} currentGcb={currentGcb} />
 
           <div className="bg-panel border border-hairline rounded-lg p-5">
             <div className="flex items-baseline justify-between gap-2 mb-1">
               <h3 className="font-display font-700 text-lg">By state</h3>
-              <p className="text-ink-dim text-xs">click a state on either map — a state with both races up shows both</p>
+              <MapViewToggle value={mapView} onChange={setMapView} />
             </div>
+            <p className="text-ink-dim text-xs mb-1">hover a state for its simulation results · click one on either map — a state with both races up shows both</p>
             <div className="grid md:grid-cols-2 gap-5 mt-3">
               <div>
                 <h4 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide mb-2">Senate</h4>
-                <StateTileMap ratings={senateRatings} onSelect={setSelectedState} selected={selectedState} />
+                <StateMap view={mapView} races={senateMapRaces} onSelect={setSelectedState} selected={selectedState} />
               </div>
               <div>
                 <h4 className="font-display font-700 text-sm text-ink-dim uppercase tracking-wide mb-2">Governors</h4>
-                <StateTileMap ratings={governorRatings} onSelect={setSelectedState} selected={selectedState} />
+                <StateMap view={mapView} races={governorMapRaces} onSelect={setSelectedState} selected={selectedState} />
               </div>
             </div>
 
@@ -434,12 +534,12 @@ export function SplitTicket() {
                 {selectedGov && <RaceWindow race={selectedGov} kind="Governor" livePolls={livePolls} />}
               </div>
             )}
-
             {selectedState && (
               <div className="mt-5 pt-5 border-t border-hairline">
-                <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate ?? selectedGov, selectedSenate ? 'Senate' : 'Governor')} />
+                <StatePrecinctPanel unit="county" stateAbbr={selectedState} simulate={raceSimulate(selectedSenate ?? selectedGov, selectedSenate ? 'Senate' : 'Governor')} />
               </div>
             )}
+
           </div>
         </div>
       )}
@@ -447,11 +547,25 @@ export function SplitTicket() {
       {tab === 'senate' && (
         <div className="space-y-6">
           <ControlGauge title="Senate" sim={senateSim} baseline={SENATE_BASELINE} />
+          <div className="grid md:grid-cols-2 gap-5">
+            <SeatDistribution title="Seat distribution" sim={senateSim} baseline={SENATE_BASELINE} />
+            <RaceLadder races={senateLadder} baseline={SENATE_BASELINE} />
+          </div>
           <div className="bg-panel border border-hairline rounded-lg p-5">
-            <StateTileMap ratings={senateRatings} onSelect={setSelectedState} selected={selectedState} />
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+              <MapViewToggle value={mapView} onChange={setMapView} />
+              <button
+                onClick={() => downloadCsv('probcalc-senate-2026.csv', racesToCsv('Senate', SENATE_RACES, senateSim, currentGcb))}
+                className="px-2.5 py-1 rounded-md border border-hairline-bright text-[11px] font-display font-700 text-ink-muted hover:text-ink hover:border-gold/50"
+                title="Every race: rating, projected margin, win probabilities and simulation counts"
+              >
+                Download CSV
+              </button>
+            </div>
+            <StateMap view={mapView} races={senateMapRaces} onSelect={setSelectedState} selected={selectedState} />
             {selectedState && (
               <div className="mt-5 pt-5 border-t border-hairline">
-                <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedSenate, 'Senate')} />
+                <StatePrecinctPanel unit="county" stateAbbr={selectedState} simulate={raceSimulate(selectedSenate, 'Senate')} />
               </div>
             )}
           </div>
@@ -462,11 +576,25 @@ export function SplitTicket() {
       {tab === 'governors' && (
         <div className="space-y-6">
           <ControlGauge title="Governors" sim={governorSim} baseline={GOVERNOR_BASELINE} />
+          <div className="grid md:grid-cols-2 gap-5">
+            <SeatDistribution title="Seat distribution" sim={governorSim} baseline={GOVERNOR_BASELINE} />
+            <RaceLadder races={governorLadder} baseline={GOVERNOR_BASELINE} />
+          </div>
           <div className="bg-panel border border-hairline rounded-lg p-5">
-            <StateTileMap ratings={governorRatings} onSelect={setSelectedState} selected={selectedState} />
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+              <MapViewToggle value={mapView} onChange={setMapView} />
+              <button
+                onClick={() => downloadCsv('probcalc-governor-2026.csv', racesToCsv('Governor', GOVERNOR_RACES, governorSim, currentGcb))}
+                className="px-2.5 py-1 rounded-md border border-hairline-bright text-[11px] font-display font-700 text-ink-muted hover:text-ink hover:border-gold/50"
+                title="Every race: rating, projected margin, win probabilities and simulation counts"
+              >
+                Download CSV
+              </button>
+            </div>
+            <StateMap view={mapView} races={governorMapRaces} onSelect={setSelectedState} selected={selectedState} />
             {selectedState && (
               <div className="mt-5 pt-5 border-t border-hairline">
-                <StatePrecinctPanel stateAbbr={selectedState} simulate={raceSimulate(selectedGov, 'Governor')} />
+                <StatePrecinctPanel unit="county" stateAbbr={selectedState} simulate={raceSimulate(selectedGov, 'Governor')} />
               </div>
             )}
           </div>
@@ -477,6 +605,7 @@ export function SplitTicket() {
       {tab === 'house' && (
         <div className="space-y-6">
           <ControlGauge title="House" sim={houseSim} baseline={HOUSE_BASELINE} />
+          <SeatDistribution title="Seat distribution" sim={houseSim} baseline={HOUSE_BASELINE} />
 
           <div className="bg-panel border border-hairline rounded-lg p-5">
             <div className="flex items-center justify-between mb-4">
@@ -494,10 +623,10 @@ export function SplitTicket() {
             <div className="max-h-[520px] overflow-y-auto pr-1">
               <HouseMosaic seats={HOUSE_SEATS} onSelectState={setSelectedState} selected={selectedState} />
             </div>
-            <p className="text-ink-dim text-[11px] font-data mt-3">click a state's tile group to see its real precincts</p>
+            <p className="text-ink-dim text-[11px] font-data mt-3">click a state's tile group to see its counties</p>
             {selectedState && (
               <div className="mt-5 pt-5 border-t border-hairline">
-                <StatePrecinctPanel stateAbbr={selectedState} />
+                <StatePrecinctPanel unit="county" stateAbbr={selectedState} />
               </div>
             )}
           </div>

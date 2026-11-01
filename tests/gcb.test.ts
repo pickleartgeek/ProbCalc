@@ -6,7 +6,7 @@ import { computeBaseCalc, optionsFromWeighting } from '../src/lib/baseCalc';
 import { fetchWikipediaPolling, rankPollingSections } from '../src/lib/mediawikiApi';
 import { loadRace } from '../src/lib/races/loader';
 import { allRaceDefs, configForRace, GALLERY_RACES, raceDefById } from '../src/lib/races/registry';
-import { marginFromResults, type PollFile } from '../src/lib/midterms/livePollData';
+import { marginFromResults, liveEntryFromLoad, type PollFile } from '../src/lib/midterms/livePollData';
 
 // Shaped like the real "2026 United States elections" page: an aggregator table, then year-headed poll tables
 // (2025–2026, 2024–2025) whose columns are just "Democratic | Republican | Other/Undecided | Lead", with rowspan'd
@@ -101,4 +101,27 @@ test('the live margin Split Ticket reads is negative (Democrats ahead) for this 
   const file: PollFile = { raceId: def.id, asOf: NOW, includedPolls: r.includedPolls, sourcePage: def.wikiPage, parties: parsed.parties, results: r.results };
   const margin = marginFromResults(file)!;
   assert.ok(margin < -4.8 && margin > -7, `R−D = ${margin.toFixed(2)}`);
+});
+
+test('zero included polls is "no data", never a dead-even 0.0 margin', () => {
+  const parsed = parsePollData(WIKITEXT, { country: 'US' });
+  // every poll falls outside a 1-day trailing window -> all percentages 0
+  const r = computeBaseCalc(parsed.parties, parsed.rows, def.electionDate, { recencyWindowDays: 1, nowIso: '2030-01-01' });
+  assert.equal(r.includedPolls, 0);
+  const file: PollFile = { raceId: def.id, asOf: NOW, includedPolls: r.includedPolls, sourcePage: def.wikiPage, parties: parsed.parties, results: r.results };
+  assert.equal(marginFromResults(file), null);
+});
+
+test('Split Ticket reads the generic ballot from the loader: real loads give a margin, seed/empty loads never do', () => {
+  const parsed = parsePollData(WIKITEXT, { country: 'US' });
+  const noWindow = { ...def, recencyWindowDays: undefined }; // the 90-day window is relative to the real clock
+  const base = { raceId: def.id, parsed, fetchedAt: '2026-09-24T00:00:00Z' };
+  const live = liveEntryFromLoad({ ...base, source: 'live' }, noWindow)!;
+  assert.ok(live && live.margin < -4.8 && live.margin > -7, `R−D = ${live?.margin}`);
+  assert.equal(live.includedPolls, 47);
+  assert.equal(liveEntryFromLoad({ ...base, source: 'fallback' }, noWindow)!.margin, live.margin);
+  assert.equal(liveEntryFromLoad({ ...base, source: 'seed' }, noWindow), null);
+  assert.equal(liveEntryFromLoad({ ...base, source: 'none', parsed: { parties: [], rows: [], warnings: [], format: 'unknown' } }, noWindow), null);
+  // a load whose polls are all outside the race's own recency window must not become a 0.0 margin
+  assert.equal(liveEntryFromLoad({ ...base, source: 'fallback' }, { ...def, recencyWindowDays: 1 }), null);
 });

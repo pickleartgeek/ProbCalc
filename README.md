@@ -114,6 +114,10 @@ needed either way.
 
 Re-deploying later is just steps 1–3 again.
 
+### County layer (Split Ticket state windows)
+
+`scripts/build-counties.mjs <precinctDir> <outDir>` rolls the per-state precinct files up into one small topojson of counties per state (`public/data/counties/<ST>.json`, ~3,100 counties, ~7.6 MB gzipped in total). A precinct's county is the first five digits of its GEOID (state + county FIPS) — true for every precinct id in the data, including the dash-less ME/NY/PA ids. County shapes are the precincts' own polygons merged, votes are summed, and Connecticut comes out as its nine planning regions. The deploy workflow runs it right after the precinct split; to run it locally, point it at the output of `split-precincts-by-state.mjs`. Alaska has no precincts in the source file, so it has no county file.
+
 ### A note on repo size now that precinct data is included
 
 `public/data/precincts/` is ~605MB (all 50 states + DC, real 2024 precinct geometry +
@@ -240,3 +244,25 @@ Either way, the app code doesn't change — it fetches `manifest.json` and
 - Structured majority/margin config (Safe/Likely/Lean/Tilt bands) per the guide's
   exercises, as an alternative to the fixed Plurality/Majority/Supermajority bands
 - Cloud/account-based sync for tracked race history, instead of per-browser localStorage
+
+## House district data
+
+`src/data/house-pres-2024.json` holds each district's 2024 presidential margin (R − D, points), from The Downballot's
+presidential-results-by-district data as republished in [jaytimm/PresElectionResults](https://github.com/jaytimm/PresElectionResults).
+These are the 119th-Congress district lines (not any 2025–26 mid-decade redistricting), and NY-21 is blank in the source, so
+it falls back to its state's margin plus a seeded spread. Check the source's terms before redistributing.
+
+## United Kingdom
+
+`scripts/prepare-uk.mjs` turns the House of Commons Library GE2024 results workbook and the ONS July 2024 constituency
+boundaries (both on the `united-states` release) into the `uk-constituencies` region preset: 650 constituencies, valid votes
+per party, and each seat's winner. The 235 MB boundary file is simplified before parsing. The "Next UK general election" race
+is bound to it, so Results maps, Election Night and the infobox all work at constituency level. NI parties are separate
+baseline keys; poll tables that list only GB parties leave them in "Others".
+
+## Infobox generator
+
+`/infobox` renders a Wikipedia-style infobox (portrait row, party colour bars, seats/votes/swing, results map) and the matching
+wikitext. The map is the race's real geography coloured by winner (downloadable as SVG for Commons). On seat-based geographies
+(UK constituencies, US House) seats are counted off the map and "seat change" uses the recorded previous winners. Lead images
+are looked up on Wikipedia by name (MediaWiki Action API, client-side); uploads still work.

@@ -1,6 +1,7 @@
 import type { GovernorRace } from './types';
 import { STATE_NAMES, PREVIOUS_GCB_R_MARGIN } from './stateGrid';
-import { RATING_R_PROB, ratingFromRProb, rProbToPseudoMargin, pseudoMarginToRProb } from './ratings';
+import { RATING_R_PROB, ratingFromRProb } from './ratings';
+import { STATE_STRENGTH, UNPOLLED_ENV_WEIGHT, clampStrength, marginForRProb, winProbR } from './raceProb';
 import { applyEnvironmentShiftMargin } from '../environmentShift';
 
 // Same convention as senateData.ts: real 2026 field, a bootstrap-prior `rating` that computeGovernorRaces() below
@@ -55,14 +56,19 @@ export const GOVERNOR_RACES: GovernorRace[] = RAW.map((r) => ({
 /** Same idea as computeSenateRaces — individually polled, so a lighter weight. */
 export function computeGovernorRaces(
   currentGcbRMargin: number,
-  weight = 0.25,
-  liveMargins: Record<string, number> = {}
+  weight = UNPOLLED_ENV_WEIGHT,
+  liveMargins: Record<string, number> = {},
+  liveStrengths: Record<string, number> = {}
 ): GovernorRace[] {
   return GOVERNOR_RACES.map((r) => {
     const realBaseline = liveMargins[r.id] ?? r.pollMargin ?? undefined;
-    const ownMargin = realBaseline ?? rProbToPseudoMargin(RATING_R_PROB[r.rating]);
+    const ownMargin = realBaseline ?? marginForRProb(RATING_R_PROB[r.rating], STATE_STRENGTH);
     const effectiveWeight = realBaseline !== undefined ? Math.min(weight, 0.1) : weight;
     const shifted = applyEnvironmentShiftMargin(ownMargin, PREVIOUS_GCB_R_MARGIN, currentGcbRMargin, effectiveWeight);
-    return { ...r, rating: ratingFromRProb(pseudoMarginToRProb(shifted)), computedMargin: shifted };
+    // A race with a real poll average is as sure as ProbCalc's own alphas for those polls say (bounded — see raceProb.ts);
+    // everything else gets the fixed prior strength.
+    const strength = liveStrengths[r.id] !== undefined ? clampStrength(liveStrengths[r.id]) : STATE_STRENGTH;
+    const pR = winProbR(shifted, strength);
+    return { ...r, rating: ratingFromRProb(pR), computedMargin: shifted, pR, strength };
   });
 }

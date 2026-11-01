@@ -33,6 +33,9 @@ export interface SenateRace {
   pollSource?: string | null;
   pollAsOf?: string | null;
   computedMargin?: number;
+  /** ProbCalc win probability for the Republican, and the D+R alpha strength it was computed from (see raceProb.ts) */
+  pR?: number;
+  strength?: number;
 }
 
 export interface GovernorRace {
@@ -49,6 +52,9 @@ export interface GovernorRace {
   pollSource?: string | null;
   pollAsOf?: string | null;
   computedMargin?: number;
+  /** ProbCalc win probability for the Republican, and the D+R alpha strength it was computed from (see raceProb.ts) */
+  pR?: number;
+  strength?: number;
 }
 
 export interface HouseSeat {
@@ -57,4 +63,8 @@ export interface HouseSeat {
   stateName: string;
   district: number; // 0 = at-large
   rating: Rating;
+  /** projected margin (R − D, points) and ProbCalc strength — lets the simulation apply a shared national swing */
+  margin?: number;
+  pR?: number;
+  strength?: number;
 }

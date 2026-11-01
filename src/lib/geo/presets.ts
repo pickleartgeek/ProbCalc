@@ -1,11 +1,11 @@
 import type { RegionBinding } from '../types';
 
 // Region presets: each links a real boundary file to the baseline electoral data that goes with it.
-// The German and Slovak presets sit at the SMALLEST division the official results are published at
-// (Wahlkreis / obec) — data prepared by scripts/prepare-germany.mjs and prepare-slovakia.mjs from the
+// The German, Slovak and UK presets sit at the SMALLEST division the official results are published at
+// (Wahlkreis / obec / constituency) — data prepared by scripts/prepare-germany.mjs, prepare-slovakia.mjs and prepare-uk.mjs from the
 // files on the project's `united-states` release, the same place the US precinct data comes from.
 
-export type PresetId = 'us-states' | 'us-house' | 'de-wahlkreise' | 'sk-obce' | 'bg-provinces';
+export type PresetId = 'us-states' | 'us-house' | 'de-wahlkreise' | 'sk-obce' | 'bg-provinces' | 'uk-constituencies';
 
 export interface RegionPreset {
   id: PresetId;
@@ -32,6 +32,12 @@ export const REGION_PRESETS: RegionPreset[] = [
     geoFile: 'de-wahlkreise.topo.json', objectName: 'regions', projection: 'mercator', baselineFile: 'de-wahlkreise.baseline.json',
     baselineNote: 'Bundestag 2025 Zweitstimmen by Wahlkreis (measured, official final result)',
     attribution: '© Die Bundeswahlleiterin 2025, Datenlizenz Deutschland – Namensnennung 2.0', infer: /german|deutsch|bundestag/i,
+  },
+  {
+    id: 'uk-constituencies', label: 'UK constituencies (650)', country: 'United Kingdom', unit: 'constituency', approxUnits: 650, groupLabel: 'Region',
+    geoFile: 'uk-constituencies.topo.json', objectName: 'regions', projection: 'mercator', baselineFile: 'uk-constituencies.baseline.json',
+    baselineNote: 'General election 2024 valid votes by constituency (measured, official result, July 2024 boundaries)',
+    attribution: 'House of Commons Library (OPL v3.0); boundaries © ONS / Ordnance Survey (OGL v3.0)', infer: /united kingdom|great britain|britain|british|westminster|^uk$|\bu\.?k\.?\b/i,
   },
   {
     id: 'sk-obce', label: 'Slovak municipalities (2,926 obce)', country: 'Slovakia', unit: 'municipality', approxUnits: 2926, groupLabel: 'Okres',

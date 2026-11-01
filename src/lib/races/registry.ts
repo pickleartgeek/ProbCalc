@@ -124,9 +124,10 @@ export const GALLERY_RACES: RaceDef[] = [
   },
   {
     // UK polling tables carry Client and Area columns (GB / Scotland / Wales) — both are ignored as metadata by the parser.
-    // No constituency map yet: it needs the 2024 boundaries + results, see the UK note in the README.
+    // Mapped onto the 650 constituencies, with GE2024 results as the previous-election baseline (scripts/prepare-uk.mjs).
     id: 'uk-next', title: 'Next UK general election', group: 'United Kingdom', region: 'United Kingdom', electionDate: '2029-08-15', votingSystem: 'FPTP', dateAssumed: true,
     wikiPage: 'Opinion polling for the next United Kingdom general election', searchQuery: 'Opinion polling for the next United Kingdom general election', kind: 'gallery',
+    regionBinding: { presetId: 'uk-constituencies', participants: 'all' },
   },
   {
     id: 'sk-next', title: 'Next Slovak parliamentary election', group: 'Slovakia', region: 'Slovakia', electionDate: '2027-09-30', votingSystem: 'PartyList', dateAssumed: true,

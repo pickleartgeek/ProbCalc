@@ -3,7 +3,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { useEngine } from '../state/store';
 import { GeoMap } from '../components/geo/GeoMap';
 import { PrecinctCanvas } from '../components/precinct/PrecinctCanvas';
-import { prettyPrecinctId } from '../components/precinct/PrecinctTooltip';
+import { prettyPrecinctId } from '../lib/precinct/prettyId';
 import { BaselineShiftTable } from '../components/results/BaselineShiftTable';
 import { REGION_PRESETS, presetById } from '../lib/geo/presets';
 import { matchPartiesToBaseline } from '../lib/geo/partyMatch';

@@ -15,6 +15,14 @@ const ALIASES: Record<string, string[]> = {
   fdp: ['fdp'],
   bsw: ['bsw', 'bundnissahrawagenknecht'],
   fw: ['fw', 'freiewahler', 'freevoters'],
+  // United Kingdom
+  con: ['con', 'conservative', 'conservatives', 'conservativeparty', 'tory', 'tories'],
+  lab: ['lab', 'labour', 'labourparty'],
+  reform: ['reform', 'reformuk', 'ruk', 'reformparty'],
+  ld: ['ld', 'libdem', 'libdems', 'liberaldemocrat', 'liberaldemocrats', 'lddem'],
+  green: ['green', 'greens', 'greenparty', 'grn'],
+  snp: ['snp', 'scottishnationalparty'],
+  pc: ['pc', 'plaid', 'plaidcymru'],
   // Slovakia
   smersd: ['smersd', 'smer', 'smersocialnademokracia', 'smersocialdemocracy'],
   hlassd: ['hlassd', 'hlas', 'voice'],

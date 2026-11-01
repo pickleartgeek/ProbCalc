@@ -98,6 +98,14 @@ async function main() {
         { cutoffDate: def?.cutoffDate ?? null, maxSampleSize: def?.maxSampleSize ?? null, recencyWindowDays: def?.recencyWindowDays ?? null }
       );
 
+      // Nothing survived the race's cutoff / recency window: every percentage would be 0 (a fake "even" race). Keep
+      // whatever good file is already there rather than overwriting it.
+      if (includedPolls === 0) {
+        log(`  ! 0 polls included (${excludedPolls} excluded by cutoff/recency window) — skipping (leaving any previous data in place)`);
+        if (!index.get(race.raceId)?.ok) index.set(race.raceId, { raceId: race.raceId, asOf: '', includedPolls: 0, ok: false });
+        continue;
+      }
+
       const asOf = new Date().toISOString();
       const output = {
         raceId: race.raceId,

@@ -60,11 +60,14 @@ jobs:
           mkdir -p public/data/precincts
           node scripts/split-precincts-by-state.mjs precincts.topojson public/data/precincts
           node scripts/enrich-manifest.mjs public/data/precincts
+          # roll the precincts up into counties (county = first 5 digits of every precinct GEOID) for the Split Ticket state windows
+          mkdir -p public/data/counties
+          node scripts/build-counties.mjs public/data/precincts public/data/counties
           rm -f precincts.topojson
           echo "public/data/precincts contents:"
           ls -la public/data/precincts | head -20
 
-      - name: Fetch and prepare German Wahlkreise + Slovak municipalities
+      - name: Fetch and prepare German Wahlkreise + Slovak municipalities + UK constituencies
         # Smallest published division for each country (299 Wahlkreise, ~2,900 obce),
         # same release the precinct data comes from. -f makes curl fail the job on a 404
         # instead of silently saving an error page.
@@ -75,11 +78,15 @@ jobs:
           curl -fL -o .cache/regions/wahlkreise.zip "$base/wahlkreise.zip"
           curl -fL -o .cache/regions/NRSR2023_SK_tab08d.xlsx "$base/NRSR2023_SK_tab08d.xlsx"
           curl -fL -o .cache/regions/obec_0.zip "$base/obec_0.zip"
+          curl -fL -o .cache/regions/HoC-GE2024-results-by-constituency.1.xlsx "$base/HoC-GE2024-results-by-constituency.1.xlsx"
+          curl -fL -o .cache/regions/uk-boundaries.zip "$base/Westminster_Parliamentary_Constituencies_July_2024_Boundaries_UK_BFC_14257342104770118.zip"
           unzip -o -q .cache/regions/wahlkreise.zip -d .cache/regions/wahlkreise
           unzip -o -q .cache/regions/obec_0.zip -d .cache/regions/obec
           mkdir -p public/data/geo
           node scripts/prepare-germany.mjs .cache/regions/btw25_kerg.csv .cache/regions/wahlkreise public/data/geo
           node scripts/prepare-slovakia.mjs .cache/regions/NRSR2023_SK_tab08d.xlsx .cache/regions/obec public/data/geo
+          # the UK boundary file is 235 MB of full-resolution polygons: the script simplifies it before parsing, so give node room
+          NODE_OPTIONS=--max-old-space-size=8192 node scripts/prepare-uk.mjs .cache/regions/HoC-GE2024-results-by-constituency.1.xlsx .cache/regions/uk-boundaries.zip public/data/geo
           ls -la public/data/geo
 
       - name: Fetch fresh polls (Wikipedia, per scripts/tracked-races.json)
