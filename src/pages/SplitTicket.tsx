@@ -296,6 +296,24 @@ export function SplitTicket() {
   const selectedSenate = selectedState ? SENATE_RACES.find((r) => r.stateAbbr === selectedState) : null;
   const selectedGov = selectedState ? GOVERNOR_RACES.find((r) => r.stateAbbr === selectedState) : null;
 
+  // Opening a race loads its poll average the same way its own card does (live Wikipedia -> browser cache -> bundled) and feeds
+  // THAT number to the model — otherwise a race the scheduled CI fetch missed shows "85 polls, D+2" on its card while the
+  // forecast quietly runs off the 2024 baseline. A seed/empty load leaves whatever was there.
+  const selectedIds = [selectedSenate?.id, selectedGov?.id].filter((x): x is string => !!x).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    for (const id of selectedIds ? selectedIds.split('|') : []) {
+      const def = midtermRaceDef(id);
+      if (!def) continue;
+      loadRace(def).then((load) => {
+        if (cancelled) return;
+        const entry = liveEntryFromLoad(load, def);
+        if (entry) setLivePolls((prev) => ({ ...prev, [id]: entry }));
+      });
+    }
+    return () => { cancelled = true; };
+  }, [selectedIds]);
+
   // Records this reading into the local GCB/race-margin history (see
   // gcbHistory.ts) so the trend chart below has something beyond a single
   // point. Debounced so dragging the slider doesn't write on every pixel of
