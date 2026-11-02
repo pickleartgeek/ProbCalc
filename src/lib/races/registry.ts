@@ -25,6 +25,8 @@ export interface RaceDef {
   sectionHint?: string;
   /** used to rescue a slightly wrong title via Wikipedia search */
   searchQuery?: string;
+  /** other pages/sections to try, in order, when the main page has no usable polling table (a table moved to its own article, a heading renamed) */
+  fallbackPages?: { page: string; sectionHint?: string }[];
   /** ignore polls before this date (the guide's "cut off at a pivotal point") */
   cutoffDate?: string;
   /** rolling recency window in days (see BaseCalcOptions.recencyWindowDays) — for races with a long, high-volume polling history and a distant/assumed election date, where cumulative decay alone can't surface momentum */
@@ -106,6 +108,11 @@ export const GALLERY_RACES: RaceDef[] = [
     id: 'gcb-2026', title: 'Generic congressional ballot 2026', group: 'United States', region: 'United States', electionDate: MIDTERM_DATE, votingSystem: 'FPTP',
     wikiPage: '2026 United States elections', sectionHint: 'generic ballot|2025–2026', searchQuery: '2026 United States elections generic ballot polling', kind: 'gallery',
     maxSampleSize: 3000, recencyWindowDays: 90,
+    // If the generic-ballot table is not on the main elections page (or its heading drifts), try the dedicated polling articles.
+    fallbackPages: [
+      { page: 'Opinion polling for the 2026 United States House of Representatives elections', sectionHint: 'generic' },
+      { page: 'Generic ballot polling for the 2026 United States elections' },
+    ],
   },
   ...['sen-ga', 'sen-me', 'sen-mi', 'sen-nc'].map((id) => ({ ...midtermRaceDef(id)!, kind: 'gallery' as const })),
   {

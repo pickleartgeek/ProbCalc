@@ -147,22 +147,30 @@ async function loadRaceUncached(def: RaceDef, deps: { force?: boolean } & Loader
   }
 
   let failure: NonNullable<RaceLoad['error']>;
-  try {
-    const res = await withSlot(() =>
-      fetchWikipediaPolling(def.wikiPage, def.wiki, def.sectionHint, { ...deps.wiki, fetchImpl: deps.fetchImpl, searchQuery: def.searchQuery })
-    );
-    const parsed = shapeForRace(parsePollData(res.wikitext, parseOptionsFor(def)), def);
-    assertRealCandidates(parsed, def);
-    if (!hasUsablePolls(parsed, def.cutoffDate)) throw new WikiFetchError('no-table', `No usable polling table in "${res.sectionTitle}" of ${res.pageTitle}`);
-    const load: RaceLoad = {
-      raceId: def.id, source: 'live', parsed, fetchedAt: new Date(now()).toISOString(), pageTitle: res.pageTitle, sectionTitle: res.sectionTitle,
-      note: res.resolvedFrom ? `Resolved "${res.resolvedFrom}" to "${res.pageTitle}"` : undefined,
-    };
-    try { storage?.setItem(KEY(def.id), JSON.stringify(load)); } catch { /* quota / private mode */ }
-    return load;
-  } catch (e) {
-    failure = e instanceof WikiFetchError ? { kind: e.kind, message: e.message } : { kind: 'unknown', message: e instanceof Error ? e.message : String(e) };
+  // The main page first, then any alternates the race lists. The FIRST failure is the one reported — it describes the page we
+  // actually expected — but any alternate that yields a usable table wins.
+  const candidates = [{ page: def.wikiPage, sectionHint: def.sectionHint, searchQuery: def.searchQuery }, ...(def.fallbackPages ?? []).map((f) => ({ page: f.page, sectionHint: f.sectionHint ?? def.sectionHint, searchQuery: undefined as string | undefined }))];
+  let firstFailure: NonNullable<RaceLoad['error']> | null = null;
+  for (const c of candidates) {
+    try {
+      const res = await withSlot(() =>
+        fetchWikipediaPolling(c.page, def.wiki, c.sectionHint, { ...deps.wiki, fetchImpl: deps.fetchImpl, searchQuery: c.searchQuery })
+      );
+      const parsed = shapeForRace(parsePollData(res.wikitext, parseOptionsFor(def)), def);
+      assertRealCandidates(parsed, def);
+      if (!hasUsablePolls(parsed, def.cutoffDate)) throw new WikiFetchError('no-table', `No usable polling table in "${res.sectionTitle}" of ${res.pageTitle}`);
+      const load: RaceLoad = {
+        raceId: def.id, source: 'live', parsed, fetchedAt: new Date(now()).toISOString(), pageTitle: res.pageTitle, sectionTitle: res.sectionTitle,
+        note: res.resolvedFrom ? `Resolved "${res.resolvedFrom}" to "${res.pageTitle}"` : c.page !== def.wikiPage ? `Polls found on "${res.pageTitle}" instead of "${def.wikiPage}"` : undefined,
+      };
+      try { storage?.setItem(KEY(def.id), JSON.stringify(load)); } catch { /* quota / private mode */ }
+      return load;
+    } catch (e) {
+      firstFailure ??= e instanceof WikiFetchError ? { kind: e.kind, message: e.message } : { kind: 'unknown', message: e instanceof Error ? e.message : String(e) };
+      if (e instanceof WikiFetchError && (e.kind === 'network' || e.kind === 'timeout' || e.kind === 'rate-limit')) break; // the site is unreachable: alternates would fail the same way
+    }
   }
+  failure = firstFailure ?? { kind: 'unknown', message: 'no candidate page' };
 
   try {
     const file = (await fetchJson(`${BASE}data/races/${def.id}.json`.replace(/\/{2,}/g, '/'))) as FallbackFile;
