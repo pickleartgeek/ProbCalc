@@ -134,3 +134,18 @@ test('registry: every 2026 Senate and governor race gets a page title and a stat
   assert.deepEqual(allRaceDefs().filter((d) => !d.regionBinding).map((d) => d.id), AWAITING_GEOGRAPHY);
   assert.equal(new Set(allRaceDefs().map((d) => d.id)).size, allRaceDefs().length, 'ids are unique');
 });
+
+test('a polling section that only transcludes its table is expanded, and the expanded table is used', async () => {
+  const log: string[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL) => {
+    const p = new URL(String(input)).searchParams;
+    log.push(`${p.get('action')}:${p.get('prop')}:${p.get('rvexpandtemplates') ?? ''}`);
+    if (p.get('prop') === 'sections') return json({ parse: { title: p.get('page'), sections: SECTIONS.map((s) => ({ ...s })) } });
+    if (p.get('prop') === 'wikitext') return json({ parse: { title: p.get('page'), wikitext: '{{:Generic ballot polling 2026}}' } });
+    if (p.get('rvexpandtemplates')) return json({ query: { pages: [{ title: p.get('titles'), revisions: [{ slots: { main: { content: table } } }] }] } });
+    throw new Error('unexpected request ' + String(input));
+  }) as typeof fetch;
+  const res = await fetchWikipediaPolling('Some page', 'en.wikipedia.org', undefined, { fetchImpl });
+  assert.ok(res.wikitext.includes('{|'), 'expanded table returned');
+  assert.ok(log.some((l) => l.endsWith(':1')), 'expansion was requested');
+});
