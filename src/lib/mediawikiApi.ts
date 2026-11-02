@@ -123,6 +123,35 @@ export async function fetchWikitext(pageTitle: string, sectionIndex?: string, wi
   return wikitext;
 }
 
+/**
+ * A section's wikitext is often just a transclusion — "{{:Generic ballot polling 2026}}", "{{Opinion polling for …}}" — with the
+ * table itself living on another page, so the raw text has no "{|" and looks table-less. Asking MediaWiki for the revision with
+ * templates expanded (rvexpandtemplates keeps the URL short, unlike sending the text to action=expandtemplates) returns the
+ * table as ordinary wikitext. Whole-page requests are heavy, hence the caller's longer timeout.
+ */
+export async function fetchExpandedWikitext(pageTitle: string, sectionIndex?: string, wiki = 'en.wikipedia.org', opts?: WikiRequestOptions): Promise<string> {
+  const params: Record<string, string> = { action: 'query', prop: 'revisions', titles: pageTitle, rvprop: 'content', rvslots: 'main', rvexpandtemplates: '1' };
+  if (sectionIndex !== undefined) params.rvsection = sectionIndex;
+  const data = await apiGet(wiki, params, opts);
+  const page = data.query?.pages?.[0] ?? Object.values(data.query?.pages ?? {})[0];
+  const rev = page?.revisions?.[0];
+  const text = rev?.slots?.main?.content ?? rev?.slots?.main?.['*'] ?? rev?.['*'] ?? rev?.content;
+  if (typeof text !== 'string') throw new WikiFetchError('api', `No expanded wikitext returned for "${pageTitle}"`);
+  return text;
+}
+
+/** Raw wikitext, then — if it holds no table but does transclude something — the same text with templates expanded. */
+async function wikitextWithTables(title: string, sectionIndex: string | undefined, wiki: string, opts?: WikiRequestOptions): Promise<string> {
+  const raw = await fetchWikitext(title, sectionIndex, wiki, opts);
+  if (raw.includes('{|') || !raw.includes('{{')) return raw;
+  try {
+    const expanded = await fetchExpandedWikitext(title, sectionIndex, wiki, opts);
+    return expanded.includes('{|') ? expanded : raw;
+  } catch {
+    return raw; // expansion is a bonus: keep the original so the caller still reports "no table" rather than an API error
+  }
+}
+
 /** Best-match page title via search — rescues a slightly-off title ("…for the next Slovak election"). */
 export async function searchTitle(query: string, wiki = 'en.wikipedia.org', opts?: WikiRequestOptions): Promise<string | null> {
   const data = await apiGet(wiki, { action: 'query', list: 'search', srsearch: query, srlimit: '3', srnamespace: '0' }, opts);
@@ -204,13 +233,13 @@ export async function fetchWikipediaPolling(
   }
   const ranked = rankPollingSections(listed.sections, sectionHint).slice(0, opts?.maxCandidates ?? 3);
   for (const sec of ranked) {
-    const wikitext = await fetchWikitext(listed.title, sec.index, wiki, opts);
+    const wikitext = await wikitextWithTables(listed.title, sec.index, wiki, opts);
     if (wikitext.includes('{|')) return { wikitext, sectionTitle: sec.line, pageTitle: listed.title, wiki, resolvedFrom };
   }
   // No obviously-named section with a table: hand back the whole page; the parser picks the best table. This is a
   // much bigger payload than any single section (easily hundreds of KB on a long, actively-edited article like a
   // year's whole-country elections page), so it gets a longer floor on top of whatever timeout the caller set —
   // the per-section timeout above was sized for one table, not the entire article.
-  const wikitext = await fetchWikitext(listed.title, undefined, wiki, { ...opts, timeoutMs: Math.max(opts?.timeoutMs ?? 20_000, 45_000) });
+  const wikitext = await wikitextWithTables(listed.title, undefined, wiki, { ...opts, timeoutMs: Math.max(opts?.timeoutMs ?? 20_000, 45_000) });
   return { wikitext, sectionTitle: '(full page — no polling section found)', pageTitle: listed.title, wiki, resolvedFrom };
 }
