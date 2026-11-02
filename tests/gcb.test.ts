@@ -125,3 +125,57 @@ test('Split Ticket reads the generic ballot from the loader: real loads give a m
   // a load whose polls are all outside the race's own recency window must not become a 0.0 margin
   assert.equal(liveEntryFromLoad({ ...base, source: 'fallback' }, { ...def, recencyWindowDays: 1 }), null);
 });
+
+test('an aggregator-only table (no sample sizes, no heading) parses as equal-weight polls and drops its own Average row', async () => {
+  const { parsePollData } = await import('../src/lib/parser');
+  const { computeBaseCalc } = await import('../src/lib/baseCalc');
+  const wt = `{| class="wikitable"
+|-
+! Source of poll<br />aggregation
+! Dates<br />administered
+! Dates<br />updated
+! Republicans
+! Democrats
+! Other/<br />Undecided
+! Margin
+|-
+| [[Decision Desk HQ]]
+| January 9, 2025 – October 23, 2026
+| October 25, 2026
+| 43.1%
+| 51.1%
+| 5.8%
+| style="background:#ccf" | Democrats +8.0%
+|-
+| [[FiftyPlusOne]]
+| January 9, 2025 – October 23, 2026
+| October 25, 2026
+| 43.0%
+| 52.2%
+| 4.8%
+| Democrats +9.2%
+|-
+| [[RealClearPolitics]]
+| October 1 – 23, 2026
+| October 25, 2026
+| 42.0%
+| 50.0%
+| 8.0%
+| Democrats +8.0%
+|- style="font-weight:bold"
+! colspan=2 | Average
+| October 25, 2026
+| 42.7%
+| 51.1%
+| 6.2%
+| Democrats +8.4%
+|}`;
+  const parsed = parsePollData(wt, { country: 'US' });
+  assert.equal(parsed.rows.length, 3, 'three sources, Average row dropped');
+  assert.ok(parsed.rows.every((r) => r.sampleSize === 1000 && r.fieldworkEnd >= '2026-10-23'));
+  assert.ok(parsed.parties.some((p) => p.affiliation === 'D') && parsed.parties.some((p) => p.affiliation === 'R'));
+  const { results } = computeBaseCalc(parsed.parties, parsed.rows, '2026-11-03');
+  const d = results.find((r) => parsed.parties.find((p) => p.id === r.partyId)?.affiliation === 'D')!.percentage;
+  const r = results.find((x) => parsed.parties.find((p) => p.id === x.partyId)?.affiliation === 'R')!.percentage;
+  assert.ok(d - r > 0.07 && d - r < 0.10, `D−R ≈ 8.4 points, got ${((d - r) * 100).toFixed(1)}`);
+});
