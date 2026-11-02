@@ -2,7 +2,7 @@ import type { ParsedPollData, Party, PollRow } from './types';
 import { parseOpdrtsParams, parseWikiDateRange } from './dateUtils';
 import { buildPartyFromHeader, isGenericHeader, matchesCandidate, slugify, type Affiliation } from './partyColors';
 import { applyPartyColors, type PartyCountry } from './partyRegistry';
-import { classifyHeader, hasRequiredColumns, type ColumnRole } from './pollHeaderTerms';
+import { classifyHeader, normalizeHeader, hasRequiredColumns, type ColumnRole } from './pollHeaderTerms';
 
 /**
  * Turns one wikitext cell into plain text. Order matters: the text-wrapper templates
@@ -231,10 +231,14 @@ function parseOneTable(tableText: string, ctx: TableContext = {}): TableParse {
     );
   }
 
+  const isAggregatorTable = colRoles.includes('firm') && !colRoles.includes('sample') && headerText.some((h) => /aggregat/i.test(normalizeHeader(h ?? '')));
   const seen: Partial<Record<Affiliation, number>> = {};
   const usedIds = new Set<string>();
   const parties: Party[] = partyDefs.map((p, idx) => {
-    const built = buildPartyFromHeader(p.header, idx, seen);
+    // aggregator tables head their columns with the bare plurals "Democrats" / "Republicans" — read those as the US parties
+    // (done here, not in detectAffiliation, because elsewhere "Democrats" can be a translated party name, e.g. Slovakia's Demokrati)
+    const header = isAggregatorTable ? p.header.replace(/^\s*democrats\s*$/i, 'Democratic').replace(/^\s*republicans\s*$/i, 'Republican') : p.header;
+    const built = buildPartyFromHeader(header, idx, seen);
     let id = built.id || `col${idx}`;
     while (usedIds.has(id)) id += '_';
     usedIds.add(id);
@@ -247,6 +251,8 @@ function parseOneTable(tableText: string, ctx: TableContext = {}): TableParse {
   for (let bi = dataStartIndex; bi < blocks.length; bi++) {
     const block = blocks[bi];
     if (!block || block.startsWith('}')) continue;
+    // the aggregator table's own summary row is a header-style row ("! colspan=2 | Average") whose cell the column alignment would lose
+    if (isAggregatorTable && /(^|\n)\s*[!|][^\n]*\b(average|mean|polling average)\s*(\n|$)/i.test(block)) continue;
     const cellsRaw0 = extractRowCells(block, '|');
     if (cellsRaw0.length === 0) continue;
     // Re-aligned against the full header width: a row that omits a rowspanned pollster/date cell (grouping two
@@ -279,6 +285,13 @@ function parseOneTable(tableText: string, ctx: TableContext = {}): TableParse {
     if (!firm && !dateText) continue;
     if (!end && Object.keys(values).length === 0) continue; // sub-heading / note row
 
+    // An aggregator summary ("Source of poll aggregation": Decision Desk HQ, RealClearPolitics, …) has no sample sizes — each row
+    // is already an average. Give every source the same nominal weight so they count as equal polls, and drop the table's own
+    // "Average" row, which would otherwise count the same numbers twice.
+    if (isAggregatorTable && sample === null) {
+      if (/^(average|mean|overall|polling average)\b/i.test(firm)) continue;
+      sample = AGGREGATOR_SAMPLE;
+    }
     const isElectionResult = sample === null && /election|result/i.test(firm);
     rows.push({
       id: `wrow-${bi}`,
@@ -343,6 +356,9 @@ export interface ParseOptions {
   /** Polls fielded before this ISO date won't count downstream, so they don't count towards choosing a table either. */
   cutoffDate?: string | null;
 }
+
+/** Nominal sample size given to each source of an aggregator table (they publish none): equal weights, below any national cap. */
+const AGGREGATOR_SAMPLE = 1000;
 
 export function parseWikitext(raw: string, opts: ParseOptions = {}): ParsedPollData {
   const text = raw
