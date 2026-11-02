@@ -10,7 +10,7 @@ import { PREVIOUS_GCB_R_MARGIN, DEFAULT_CURRENT_GCB_R_MARGIN, STATE_PVI_2024_FAL
 import { loadRealStatePVI } from '../lib/midterms/precinctAnchor';
 import { loadSenatePrecinctAnchor, type SenatePrecinctAnchor } from '../lib/midterms/senatePrecinctAnchor';
 import { loadLivePolls, liveEntryFromLoad, type LivePollEntry } from '../lib/midterms/livePollData';
-import { loadRace } from '../lib/races/loader';
+import { loadRace, describeFailure } from '../lib/races/loader';
 import { recordGcbSnapshot, recordRaceMargins, getGcbHistory } from '../lib/midterms/gcbHistory';
 import { StateMap, type StateMapRace } from '../components/midterms/StateMap';
 import { StatePrecinctPanel } from '../components/precinct/StatePrecinctPanel';
@@ -137,6 +137,7 @@ export function SplitTicket() {
   const [currentGcb, setCurrentGcb] = useState(hasUrlGcb ? urlGcb : DEFAULT_CURRENT_GCB_R_MARGIN);
   // Until the reader moves the slider themselves, it follows the live generic-ballot average (the 'gcb-2026' race: fetched
   // and modelled by BaseCalc like every other race). The constant above is only the fallback before the first fetch lands.
+  const [gcbIssue, setGcbIssue] = useState<string | null>(null); // why the live generic ballot isn't in use, if it isn't
   const [gcbTouched, setGcbTouched] = useState(hasUrlGcb); // a shared link pins the slider where the sender left it
 
   // Write the shareable state back to the URL: gcb only once the reader has set it (otherwise it just follows the live average),
@@ -195,6 +196,7 @@ export function SplitTicket() {
         if (cancelled) return;
         const entry = liveEntryFromLoad(load, GCB_DEF);
         if (entry) setLivePolls((prev) => ({ ...prev, 'gcb-2026': entry }));
+        setGcbIssue(load.source === 'live' || load.source === 'browser-cache' ? null : load.error ? `${describeFailure(load.error)} (${load.error.message})` : 'no usable polls found');
       });
     }
     return () => {
@@ -389,7 +391,7 @@ export function SplitTicket() {
                   )}
                 </span>
               ) : (
-                <span className="text-ink-dim text-xs font-data">no live average yet &mdash; starting from the last aggregator snapshot</span>
+                <span className="text-ink-dim text-xs font-data">no live average yet &mdash; starting from the last aggregator snapshot{gcbIssue && <span className="block text-gold/80 mt-0.5">why: {gcbIssue}</span>}</span>
               )}
             </div>
           </div>
